@@ -229,7 +229,7 @@ class Survdat(object):
 		import labkey
 		import re
 		from functools import reduce
-		
+
 		self.ca = df
 		self.pids = pids
 		self.version = version
@@ -667,13 +667,9 @@ class Survdat(object):
 			# 	inplace=True)
 
 	def surv_time(self):
-		
-		if None in (self.pid_diag, self.ons, self.hes):
-			raise ValueError('[ERROR] in calculating survival time.'
-			'Have quer_ons, quer_dod, quer_hes and merge_dod been run?')
 
 		date_cutoff = pd.to_datetime( 
-			max(c.ons['date_of_death']),
+			max(self.ons['date_of_death']),
 			format='%Y-%m-%d')
 
 		surv_dat = pd.merge(
@@ -813,7 +809,7 @@ def kmsurvival(data, strata, output,  plt_title, plotting=True, table=True):
 			{
 				'group' : g,
 				'n' : fit.event_observed.size,
-				'events' : sum(surv_dat['status'][s]),
+				'events' : sum(data['status'][s]),
 				'median' : fit.median_survival_time_,
 				'upper_ci' : median_survival_times(
 					fit.confidence_interval_
