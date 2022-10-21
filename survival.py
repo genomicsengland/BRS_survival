@@ -74,8 +74,12 @@ def argparser():
 		default=None,
 		help=('Cancer disease_types, or clinical indications to include, '
 			'if none given all GEL disease_types will be included'))
-	# argv = '-i -g KRAS BRAS -s or -v main-programme/main-programme_v16_2022-10-13 -d breast COLORECTAL -o /home/cbouwens/scripts'.split()
-	# options=parser.parse_args(argv)
+	parser.add_argument('-t', "--title",
+		dest='plttitle',
+		default='Survival analysis',
+		required=False,
+		help='Title for Kaplan-Meier plot.')
+
 	options=parser.parse_args()
 	
 	return options
@@ -220,6 +224,12 @@ def assign_groups(dataframe, vars, type='and'):
 class Survdat(object):
 	
 	def __init__(self, df, pids, version, impute):
+		import pandas as pd
+		import warnings
+		import labkey
+		import re
+		from functools import reduce
+
 		self.ca = df
 		self.pids = pids
 		self.version = version
@@ -524,7 +534,7 @@ class Survdat(object):
 		
 		################################################################
 		# load in full av_dod / 
-		# as previously we've limited it to particiants of interest.
+		# In quer_dod() we've limited it to particiants of interest.
 		# now we want to generate an average time between enrolment and
 		# diagnosis based on ALL participants
 		################################################################
@@ -656,254 +666,77 @@ class Survdat(object):
 			# 	subset=['diagnosis_date'],
 			# 	inplace=True)
 
+	def surv_time(self):
 
+		date_cutoff = pd.to_datetime( 
+			max(self.ons['date_of_death']),
+			format='%Y-%m-%d')
 
+		surv_dat = pd.merge(
+			self.pid_diag,
+			self.ons, 
+			how='left', 
+			on='participant_id')
+		surv_dat = pd.merge(
+			surv_dat, 
+			self.hes, 
+			how='left', 
+			on='participant_id')
 
-# start_time = time.time()
-# lab_to_df(sql2,options.version)
-# print("--- %s seconds ---" % (time.time() - start_time))
-# def determine_surv_essentials(self, pids version):
-# 	"""Extract the neccessary tables to determine survival time from labkey
-# 	for a set of participant_id.
+		for x in ['lastseen', 'date_of_death', 'diagnosis_date']:
+			surv_dat[x] = surv_dat[x].apply(
+				pd.to_datetime,
+					format='%Y-%m-%d'
+				)
+		# set the last date based on death date, lastseen or the maximum
+		# date seen in the HES data.
+		surv_dat.loc[
+			~surv_dat['date_of_death'].isna(), 'last_date'
+			] = surv_dat['date_of_death']
+		surv_dat.loc[
+			(surv_dat['date_of_death'].isna())
+			& (~surv_dat['lastseen'].isna()), 'last_date'
+			] = surv_dat['lastseen']
+		surv_dat.loc[
+			(surv_dat['date_of_death'].isna()) 
+			& (surv_dat['lastseen'].isna()), 'last_date'
+			] = date_cutoff
 
-# 	Args:
-# 		pids (list): list of participant ids to include
+		surv_dat['last_date'] = surv_dat['last_date'].apply(
+			pd.to_datetime,
+				format='%Y-%m-%d'
+			)
+		# add live / dead flag.
+		surv_dat['status'] = [
+			0 if pd.isnull(x) else 1 for x in surv_dat['date_of_death']
+			]
+		surv_dat['survival'] = (
+			surv_dat['last_date'] - surv_dat['diagnosis_date']
+			)
+		# filter out those with a last date before the diagnosis date.
+		surv_dat = surv_dat.loc[
+			~(surv_dat['survival'].dt.days <= 0)
+			& ~(surv_dat['survival'].isna())]
 
-# 	Returns:
-# 		pid_diag (pd.DataFrame): Disease_type, participant_id and 
-# 			diagnosis_date
-# 		no_diag (pd.DataFrame): Participants where no diagnosis date was found.
-# 		ons (pd.DataFrame): date of death per participant_id
-# 		hes (pd.DataFrame): date of last interaction as determined from 
-# 			hospital episode statistics. 
-# 	"""
+		surv_dat = surv_dat.drop_duplicates([
+			'participant_id', 
+			'disease_type'
+			])
 
-# 	# note this f string SQL query is not infinitely scalable.
-# 	# we'll run into the chacacter limit, but for 100K pids it is fine.
-# 	###
-# 	# determine dates_of_death 
-# 	# functionize this, and let it be done on particular participant ids.
-# 	# that way someone can identify participant ids, and merge it with their grouping.
-# 	###
-# 	# import date_of_death per participant_id from 'mortality'
-# 	query2 = (
-# 		f'''
-# 		SELECT 
-# 			DISTINCT participant_id, death_date
-# 		FROM
-# 			death_details
-# 		WHERE participant_id IN {*pids,}
-# 		'''
-# 	)
-# 	ons1 = lab_to_df(
-# 		sql_query=query2,
-# 		dr=version)
-# 	query3 = (
-# 		f'''
-# 		SELECT 
-# 			participant_id, date_of_death
-# 		FROM 
-# 			mortality
-# 		WHERE participant_id IN {*pids,}
-# 	''')
-# 	ons2 = lab_to_df(
-# 		sql_query=query3,
-# 		dr=version)
+		surv_data = surv_dat[[
+			'participant_id',
+			'disease_type',
+			'diagnosis_date',
+			'last_date',
+			'survival',
+			'status']]
 
-# 	ons1.rename(columns={'death_date':'date_of_death'}, inplace=True)
-# 	ons = ons1.merge(ons2, how='outer')
-# 	ons.sort_values(by='date_of_death', ascending=True, inplace=True)
-# 	ons.drop_duplicates(subset='participant_id', keep='first', inplace=True)
+		self.surv_dat = surv_data
 
-
-# 	###
-# 	# determine date of last follow up (last time seem)
-# 	###
-# 	hes_tables=[
-# 		('apc','disdate'),
-# 		('ae','arrivaldate'),
-# 		('op','apptdate'),
-# 		('cc','ccdisdate')
-# 		]
-
-# 	query = (f'''
-# 	SELECT 
-# 		x.participant_id, MAX(x.y) AS LastSeen 
-# 	FROM 
-# 		hes_x as x 
-# 	GROUP BY x.participant_id 
-# 	WHERE x.participant_id IN {*pids,}
-# 	''')
-# 	# replacing x and y with matched hes data and column name in.
-# 	q_apc, q_ae, q_op, q_cc = [
-# 		query.replace('x',i[0]).replace('y' ,i[1]) for i in hes_tables
-# 		]
-
-# 	apc_lastseen = lab_to_df(
-# 		sql_query=q_apc,
-# 		dr=options.version
-# 		)
-
-# 	ae_lastseen= lab_to_df(
-# 		sql_query=q_ae,
-# 		dr=options.version
-# 		)
-
-# 	op_lastseen= lab_to_df(
-# 		sql_query=q_op,
-# 		dr=options.version
-# 		)
-
-# 	cc_lastseen= lab_to_df(
-# 		sql_query=q_cc,
-# 		dr=options.version
-# 		)
-
-# 	dfs = [apc_lastseen, ae_lastseen, op_lastseen, cc_lastseen]
-# 	# merge multiple dataframes to find the last entry in all.
-# 	merged_lastseen = reduce(
-# 		lambda left, right: pd.merge(
-# 			left, right, on=['participant_id'],
-# 			how = 'outer'),
-# 		dfs)
-# 	merged_lastseen.columns = ['participant_id', 'apc', 'ae', 'op', 'cc']
-# 	# not all are parsed as datetimes, which we need in order to select last value.
-# 	for i in [ 'apc', 'ae', 'op', 'cc']:
-# 		merged_lastseen[i] = pd.to_datetime(merged_lastseen[i])
-
-# 	hes=pd.DataFrame({
-# 		'participant_id':merged_lastseen['participant_id'],
-# 		'lastseen':merged_lastseen[['apc','ae','op','cc']].max(axis=1)})
-
-# 	###
-# 	# determine date of diagnosis
-# 	##
-# 	query1 =(f'''
-# 	SELECT 
-# 		DISTINCT participant_id, diagnosis_date, diagnosis_icd_code
-# 	FROM
-# 		cancer_participant_tumour
-# 	WHERE
-# 		participant_id IN {*pids,}
-# 	''')
-# 	dod_participant = lab_to_df(
-# 		sql_query=query1,
-# 		dr=options.version
-# 		)
-# 	dod_participant['disease_type'] = translateicd(
-# 		dod_participant['diagnosis_icd_code'],
-# 		lookups=ic_lookup
-# 		)
-# 	dod_participant.sort_values(
-# 		['diagnosis_date'],
-# 		ascending=True,
-# 		inplace=True)
-# 	dod_participant.drop_duplicates(
-# 		['participant_id', 'disease_type'],
-# 		keep='first',
-# 		inplace=True)
-
-# 	query2=(f'''
-# 	SELECT 
-# 		DISTINCT participant_id, diagnosisdatebest, site_icd10_o2
-# 	FROM
-# 		av_tumour
-# 	WHERE
-# 		WHERE participant_id IN {*pids,}
-# 	''')
-# 	av_dod_participant = lab_to_df(
-# 		sql_query=query2,
-# 		dr=options.version
-# 		)
-# 	av_dod_participant['disease_type'] = translateicd(
-# 		av_dod_participant['site_icd10_o2'],
-# 		lookups=ic_lookup
-# 		)
-# 	av_dod_participant = (av_dod_participant
-# 		.sort_values(
-# 			['diagnosisdatebest'],
-# 			ascending=True
-# 			)
-# 		.drop_duplicates(
-# 			['participant_id', 'disease_type'],
-# 			keep='first'
-# 			)
-# 		.rename(
-# 			columns={'diagnosisdatebest':'diagnosis_date'}
-# 			)
-# 		)
-
-# 	av_dod_participant_merged = (
-# 		av_dod_participant[[
-# 		'participant_id', 
-# 		'diagnosis_date',
-# 		'disease_type'
-# 		]]
-# 		.merge(dod_participant[[
-# 			'disease_type',
-# 			'participant_id',
-# 			'diagnosis_date']],
-# 			how='outer')
-# 		.sort_values(['participant_id', 'diagnosis_date'], ascending=True)
-# 		.drop_duplicates(['participant_id', 'disease_type'], keep='first')
-# 		)
-
-# 	###
-# 	# merge diagnosis date with pID
-# 	###
-# 	### Merging diagnosis date with pID 
-# 	### (by participant_id and then manually matching disease_type)
-# 	### disease_type either matching
-# 	# OR CHILDHOOD / CUP accept any TYPE 
-# 	# OR if OTHER in translation accepted
-# 	# this is neccessary as multiple diagnosis may have taken place
-# 	# and we've grouped childhood/Carcinoma of unknown origin under other.
-# 	pid_diag = pd.merge(
-# 		ca_analysis,
-# 		av_dod_participant_merged,
-# 		how='left',
-# 		on=['participant_id'])
-
-# 	pid_diag['match'] = np.where(
-# 		pid_diag['disease_type_x'] == pid_diag['disease_type_y'],
-# 		1,0
-# 		)
-# 	pid_diag = (pid_diag
-# 		.sort_values(
-# 			['participant_id', 'disease_type_x', 'match'],
-# 			ascending=[True, True, False]
-# 			)
-# 		.drop_duplicates(['participant_id', 'disease_type_x'])
-# 		.rename(columns={'disease_type_x':'disease_type'})
-# 		.loc[
-# 			(pid_diag['disease_type_x'] == pid_diag['disease_type_y'])
-# 			| (pid_diag['disease_type_x'].isin(
-# 				['CHILDHOOD',
-# 				'CARCINOMA_OF_UNKNOWN_PRIMARY'])
-# 				)
-# 			| (pid_diag['disease_type_y'] == 'OTHER')
-# 		]
-# 		.drop(['disease_type_y', 'match'],axis=1)
-# 	)
-
-# 	# which samples have no date of diagnosis?
-# 	outer_join = ca_analysis.merge(
-# 		pid_diag,
-# 		how='left',
-# 		on=['participant_id', 'disease_type'],
-# 		indicator=True
-# 		)
-# 	no_diag = outer_join[~(outer_join._merge == 'both')]
-# 	no_diag = no_diag.drop(['_merge'], axis=1)
-
-
-
-# 	return pid_diag, no_diag, hes, ons
-
-
-
-
-def query_ctd(df, version, genes, 
+def query_ctd(
+	df, 
+	version, 
+	genes, 
 	clinsig=['(likely)pathogenic','LoF','path_LoF']):
 	"""Returns TRUE/FALSE for samples in dataframe by querying labkey,
 
@@ -976,7 +809,7 @@ def kmsurvival(data, strata, output,  plt_title, plotting=True, table=True):
 			{
 				'group' : g,
 				'n' : fit.event_observed.size,
-				'events' : sum(surv_dat['status'][s]),
+				'events' : sum(data['status'][s]),
 				'median' : fit.median_survival_time_,
 				'upper_ci' : median_survival_times(
 					fit.confidence_interval_
@@ -1015,7 +848,8 @@ def kmsurvival(data, strata, output,  plt_title, plotting=True, table=True):
 			),
 			axis=1
 	)
-	
+	if not plotting:
+		return kmf.plot_survival_function(), outdf
 	return outdf
 
 
@@ -1058,19 +892,17 @@ if __name__ == '__main__':
 		sql_query =ca_query,
 		dr=options.version)
 
-
 	c = Survdat(
 		ca_analysis,
 		ca_analysis['participant_id'], 
 		options.version, 
 		True)
 	c.quer_ons()  # get survival data : c.ons
-	# Is there a quicker way to query the HES tables
-	# or get the information of last follow up from a smaller table?
 	c.quer_hes()  # query HES data for date of last follow up : c.hes
 	c.quer_dod()  # get date of diagnosis :c.dod
 	c.merge_dod()  # match date of diagnosis with cohort: c.pid_diag, c.no_diag
 	c.dod_impute()  # impute date of diagnosis from average per disease type c.full_diag
+	c.surv_time()  # use ons, hes, dod and pid_diag for survival data.
 
 
 	############################################
@@ -1129,20 +961,7 @@ if __name__ == '__main__':
 		'survival',
 		'status']]
 
-	# surv_dat2 = surv_dat
-
-	# surv_dat.columns = 'apc_' + surv_dat.columns.values
-
-
-	# surv_dat2 = pd.merge(
-	# 	surv_dat_op,
-	# 	surv_dat[['apc_participant_id','apc_survival']],
-	# 	how='left',
-	# 	left_on='participant_id',
-	# 	right_on='apc_participant_id'
-	# )
-
-	# surv_dat2.loc[surv_dat2['survival'] < surv_dat2['apc_survival']]
+	
 	####################
 	# include SNV data
 	####################
@@ -1157,9 +976,7 @@ if __name__ == '__main__':
 		genes=options.genes
 		)
 
-	# TODO, return a mapping for the and/ or too to later plot with.
-	# options.strata='and'
-
+	# TODO, return a mapping for the and/ or too to later adjust labels with.
 	if not options.strata == 'full':
 		grouped_dat = assign_groups(
 			dataframe=surv_dat, 
@@ -1176,13 +993,10 @@ if __name__ == '__main__':
 	###
 	# calculate KM survival
 	###
-	# should the grouping step be put in th kmsurvival function?
-	# or should the data include a 'group' already?
-	# lets assume the latter initially.
 	# TODO
 	# check if And, Or, full all work.
 	# How do we give names/labels to the groups? - 
-	# 	we'd have to keep track of their mapping.
+	# 	we would have to keep track of their mapping.
 
 
 
@@ -1190,5 +1004,5 @@ if __name__ == '__main__':
 		data=grouped_dat,
 		strata=pd.unique(grouped_dat['group']),
 		output=options.out,
-		plt_title='survival curve of KRAS/BRAS mutated samples vs wild type',
+		plt_title=options.plttitle,
 		)
