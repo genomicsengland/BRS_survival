@@ -224,6 +224,12 @@ def assign_groups(dataframe, vars, type='and'):
 class Survdat(object):
 	
 	def __init__(self, df, pids, version, impute):
+		import pandas as pd
+		import warnings
+		import labkey
+		import re
+		from functools import reduce
+		
 		self.ca = df
 		self.pids = pids
 		self.version = version
@@ -660,6 +666,76 @@ class Survdat(object):
 			# 	subset=['diagnosis_date'],
 			# 	inplace=True)
 
+	def surv_time(self):
+		
+		if None in (self.pid_diag, self.ons, self.hes):
+			raise ValueError('[ERROR] in calculating survival time.'
+			'Have quer_ons, quer_dod, quer_hes and merge_dod been run?')
+
+		date_cutoff = pd.to_datetime( 
+			max(c.ons['date_of_death']),
+			format='%Y-%m-%d')
+
+		surv_dat = pd.merge(
+			self.pid_diag,
+			self.ons, 
+			how='left', 
+			on='participant_id')
+		surv_dat = pd.merge(
+			surv_dat, 
+			self.hes, 
+			how='left', 
+			on='participant_id')
+
+		for x in ['lastseen', 'date_of_death', 'diagnosis_date']:
+			surv_dat[x] = surv_dat[x].apply(
+				pd.to_datetime,
+					format='%Y-%m-%d'
+				)
+		# set the last date based on death date, lastseen or the maximum
+		# date seen in the HES data.
+		surv_dat.loc[
+			~surv_dat['date_of_death'].isna(), 'last_date'
+			] = surv_dat['date_of_death']
+		surv_dat.loc[
+			(surv_dat['date_of_death'].isna())
+			& (~surv_dat['lastseen'].isna()), 'last_date'
+			] = surv_dat['lastseen']
+		surv_dat.loc[
+			(surv_dat['date_of_death'].isna()) 
+			& (surv_dat['lastseen'].isna()), 'last_date'
+			] = date_cutoff
+
+		surv_dat['last_date'] = surv_dat['last_date'].apply(
+			pd.to_datetime,
+				format='%Y-%m-%d'
+			)
+		# add live / dead flag.
+		surv_dat['status'] = [
+			0 if pd.isnull(x) else 1 for x in surv_dat['date_of_death']
+			]
+		surv_dat['survival'] = (
+			surv_dat['last_date'] - surv_dat['diagnosis_date']
+			)
+		# filter out those with a last date before the diagnosis date.
+		surv_dat = surv_dat.loc[
+			~(surv_dat['survival'].dt.days <= 0)
+			& ~(surv_dat['survival'].isna())]
+
+		surv_dat = surv_dat.drop_duplicates([
+			'participant_id', 
+			'disease_type'
+			])
+
+		surv_data = surv_dat[[
+			'participant_id',
+			'disease_type',
+			'diagnosis_date',
+			'last_date',
+			'survival',
+			'status']]
+
+		self.surv_dat = surv_data
 
 def query_ctd(
 	df, 
@@ -830,6 +906,7 @@ if __name__ == '__main__':
 	c.quer_dod()  # get date of diagnosis :c.dod
 	c.merge_dod()  # match date of diagnosis with cohort: c.pid_diag, c.no_diag
 	c.dod_impute()  # impute date of diagnosis from average per disease type c.full_diag
+	c.surv_time()  # use ons, hes, dod and pid_diag for survival data.
 
 
 	############################################
