@@ -9,11 +9,8 @@
 
 #########################
 '''TODO
-- create confluence page with documentation
-- Check if part 2 of the script works. 
-with a number of participant ids, return the survival time and / or plot
-- check if part 3 works: with a list of survival times / censoring, plot.
 - add coxPH.
+- mapping and group clarification
 '''
 import argparse
 import numpy as np
@@ -733,6 +730,7 @@ class Survdat(object):
 
 		self.surv_dat = surv_data
 
+# TODO add a test to make sure gene is in a list.
 def query_ctd(
 	df, 
 	version, 
@@ -761,7 +759,7 @@ def query_ctd(
 
 	for strat in genes:
 		df[strat] = np.where(
-			surv_dat['participant_id'].isin(snvdb['participant_id']),
+			df['participant_id'].isin(snvdb['participant_id']),
 			True,
 			False
 			)
@@ -819,7 +817,9 @@ def kmsurvival(data, strata, output,  plt_title, plotting=True, table=True):
 					).iloc[:,0].item()
 			}
 		)
-		if plotting:
+		# when not saving the plot only one var is plot.
+		# should we
+		if plotting:  
 			ax = kmf.plot_survival_function().plot(ax=ax)
 	if plotting:
 		plt.savefig(output+'surv.png',bbox_inches='tight', dpi=300)
@@ -908,58 +908,59 @@ if __name__ == '__main__':
 	############################################
 	# bringing together the time to event data
 	############################################
-	date_cutoff = pd.to_datetime( 
-		max(c.ons['date_of_death']),
-		format='%Y-%m-%d')
+	# below is already performed at c.surv_time()
+	# date_cutoff = pd.to_datetime( 
+	# 	max(c.ons['date_of_death']),
+	# 	format='%Y-%m-%d')
 
-	surv_dat = pd.merge(c.pid_diag, c.ons, how='left', on='participant_id')
-	surv_dat = pd.merge(surv_dat, c.hes, how='left', on='participant_id')
+	# surv_dat = pd.merge(c.pid_diag, c.ons, how='left', on='participant_id')
+	# surv_dat = pd.merge(surv_dat, c.hes, how='left', on='participant_id')
 
-	for x in ['lastseen', 'date_of_death', 'diagnosis_date']:
-		surv_dat[x] = surv_dat[x].apply(
-			pd.to_datetime,
-				format='%Y-%m-%d'
-			)
-	# set the last date based on death date, lastseen or the maximum
-	# date seen in the HES data.
-	surv_dat.loc[
-		~surv_dat['date_of_death'].isna(), 'last_date'
-		] = surv_dat['date_of_death']
-	surv_dat.loc[
-		(surv_dat['date_of_death'].isna())
-		& (~surv_dat['lastseen'].isna()), 'last_date'
-		] = surv_dat['lastseen']
-	surv_dat.loc[
-		(surv_dat['date_of_death'].isna()) 
-		& (surv_dat['lastseen'].isna()), 'last_date'
-		] = date_cutoff
+	# for x in ['lastseen', 'date_of_death', 'diagnosis_date']:
+	# 	surv_dat[x] = surv_dat[x].apply(
+	# 		pd.to_datetime,
+	# 			format='%Y-%m-%d'
+	# 		)
+	# # set the last date based on death date, lastseen or the maximum
+	# # date seen in the HES data.
+	# surv_dat.loc[
+	# 	~surv_dat['date_of_death'].isna(), 'last_date'
+	# 	] = surv_dat['date_of_death']
+	# surv_dat.loc[
+	# 	(surv_dat['date_of_death'].isna())
+	# 	& (~surv_dat['lastseen'].isna()), 'last_date'
+	# 	] = surv_dat['lastseen']
+	# surv_dat.loc[
+	# 	(surv_dat['date_of_death'].isna()) 
+	# 	& (surv_dat['lastseen'].isna()), 'last_date'
+	# 	] = date_cutoff
 
-	surv_dat['last_date'] = surv_dat['last_date'].apply(
-		pd.to_datetime,
-			format='%Y-%m-%d'
-		)
-	# add live / dead flag.
-	surv_dat['status'] = [
-		0 if pd.isnull(x) else 1 for x in surv_dat['date_of_death']
-		]
-	surv_dat['survival'] = (surv_dat['last_date'] - surv_dat['diagnosis_date'])
-	# filter out those with a last date before the diagnosis date.
-	surv_dat = surv_dat.loc[
-		~(surv_dat['survival'].dt.days <= 0)
-		& ~(surv_dat['survival'].isna())]
+	# surv_dat['last_date'] = surv_dat['last_date'].apply(
+	# 	pd.to_datetime,
+	# 		format='%Y-%m-%d'
+	# 	)
+	# # add live / dead flag.
+	# surv_dat['status'] = [
+	# 	0 if pd.isnull(x) else 1 for x in surv_dat['date_of_death']
+	# 	]
+	# surv_dat['survival'] = (surv_dat['last_date'] - surv_dat['diagnosis_date'])
+	# # filter out those with a last date before the diagnosis date.
+	# surv_dat = surv_dat.loc[
+	# 	~(surv_dat['survival'].dt.days <= 0)
+	# 	& ~(surv_dat['survival'].isna())]
 
-	surv_dat = surv_dat.drop_duplicates([
-		'participant_id', 
-		'disease_type'
-		])
+	# surv_dat = surv_dat.drop_duplicates([
+	# 	'participant_id', 
+	# 	'disease_type'
+	# 	])
 
-	surv_dat = surv_dat[[
-		'participant_id',
-		'disease_type',
-		'diagnosis_date',
-		'last_date',
-		'survival',
-		'status']]
+	# surv_dat = surv_dat[[
+	# 	'participant_id',
+	# 	'disease_type',
+	# 	'diagnosis_date',
+	# 	'last_date',
+	# 	'survival',
+	# 	'status']]
 
 	
 	####################
@@ -971,7 +972,7 @@ if __name__ == '__main__':
 	# BRACA wt, PIK3CA mut
 	# BRACA wt, PIK3CA wt
 	surv_dat = query_ctd(  # loading in snvdb can be slow.
-		df = surv_dat,
+		df = c.surv_dat,
 		version='main-programme/main-programme_v16_2022-10-13',
 		genes=options.genes
 		)
