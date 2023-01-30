@@ -13,11 +13,11 @@ module purge
 module load lang/miniconda3/2020.04
 conda activate py3pypirev3
 
-python3 /home/cbouwens/scripts/Survival_analysis/survival.py \
---genes KRAS PIK3CA \
+python3 /Users/christianbouwens/Documents/Internal/survival/surv_git/survival.py \
+--genes KRAS TP53 \
 -s and \
--imputate False \
--o /home/cbouwens/scripts/Survival_analysis/test 
+--imputate \
+-o /Users/christianbouwens/Documents/Internal/survival/surv_git/test
 
 
 
@@ -32,24 +32,6 @@ python3 /home/cbouwens/scripts/Survival_analysis/survival.py \
 #       output - surv_dat[['participant_id', survival time, censoring]] - to merge with own events.
 # 3. just run the KM or CoxPH if you have a table with surv/event/strat
 #       output same as 1 without the pre-processing.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
