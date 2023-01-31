@@ -75,7 +75,7 @@ def argparser():
 		required=False,
 		help='Title for Kaplan-Meier plot.')
 	# for testing purposes:
-	# argv = '--genes APC CIITA -s full -o ./test'.split()
+	# argv = '--genes KRAS -s full -o ./test'.split()
 	# args = parser.parse_args(argv)
 	options=parser.parse_args()
 	
@@ -807,7 +807,7 @@ def query_ctd(
 		'(likely)pathogenic','LoF','path_LoF', excluding 'other'
 	"""
 
-	genes_list = force_list(options.genes)
+	genes_list = force_list(genes)
 
 	if len(genes_list) > 1:
 		sqlstr = (f'''
@@ -829,7 +829,7 @@ def query_ctd(
 		FROM
 			lists.cancer_tier_and_domain_variants
 		WHERE
-			gene IN ('{genes_list}') AND relevance IN {*clinsig,}
+			gene IN ('{genes_list[0]}') AND relevance IN {*clinsig,}
 		''')
 
 	snvdb = lab_to_df(sqlstr, dr=version)
