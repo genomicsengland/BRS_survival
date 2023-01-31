@@ -782,7 +782,11 @@ class Survdat(object):
 def force_list(iter):
 	# a test to make sure the gene is in a list.
 	# so that a single gene is not parsed like 'K', 'R', 'A', 'S'
-	from collections import Iterable
+	try:
+		from collections.abc import Iterable
+	except ImportError:
+		from collections import Iterable
+
 	if not isinstance(iter, Iterable) or isinstance(iter, str):
 		iter = [iter]
 	return iter                   
