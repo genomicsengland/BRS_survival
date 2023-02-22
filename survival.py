@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import warnings
 import labkey
+import psycopg2 as ps
 import re
 from functools import reduce
 
@@ -58,6 +59,12 @@ def argparser():
 		dest='version',
 		default="main-programme/main-programme_v16_2022-10-13",
 		help='GEL data release version',)
+	parser.add_argument('-c', "--cohort_browser",
+		dest='cohort_browser',
+		action='store_true',
+		default=False,
+		help='Flag: should the Cohort Browser be used in place of Labkey?'
+			'Default=False')	
 	parser.add_argument('-o', "--out",
 		dest='out',
 		default=None,
@@ -82,27 +89,49 @@ def argparser():
 	return options
 
 
-def lab_to_df(sql_query, dr):
+def lab_to_df(sql_query, dr, cb):
 	"""generate an pandas dataframe from labkey sql query
 
 	Args:
 		sql_query (str): an sql query as string.
-		dr (str): GEL datarelease version
+		dr (str): GEL datarelease version.
+		cb (boolean): use Cohort Browser instead of Labkey.
 	"""
-	server_context = labkey.utils.create_server_context(
-		domain= "labkey-embassy.gel.zone",
-		container_path = dr,
-		context_path = "labkey",
-		use_ssl = True
-	)
+	if not cb:
+		server_context = labkey.utils.create_server_context(
+			domain= "labkey-embassy.gel.zone",
+			container_path = dr,
+			context_path = "labkey",
+			use_ssl = True
+		)
+		
+		results =  labkey.query.execute_sql(
+			server_context,
+			schema_name="lists",
+			sql=sql_query,
+			max_rows=5000000
+		)
+		res = pd.DataFrame(results['rows'])
+	else:
+		# connect to CB db
+		conn = ps.connect(
+			database="gel_clinical_cb_sql_pro",
+			host="clinical-cb-sql-pro.cfe5cdx3wlef.eu-west-2.rds.amazonaws.com",
+			user="jupyter_notebook",
+			password="anXReTz36Q5r",
+			port="5432",
+			options="-c search_path=%s" % dr
+		)
+		# Open a cursor to perform database operations
+		cur = conn.cursor()
+		# Execute a query
+		cur.execute(sql_query)
+		# Retireve query results 
+		records = cur.fetchall()
+
+		res = pd.DataFrame(records, columns=[desc[0] for desc in cur.description])
 	
-	results =  labkey.query.execute_sql(
-		server_context,
-		schema_name="lists",
-		sql=sql_query,
-		max_rows=5000000
-	)
-	return(pd.DataFrame(results['rows']))
+	return(res)
 
 
 ic_lookup = [  # the ic_lookup regex doesn't function the same in R and python.
@@ -268,7 +297,7 @@ def create_name_map(
 
 class Survdat(object):
 	
-	def __init__(self, df, pids, version, impute):
+	def __init__(self, df, pids, version, impute, cb):
 		import pandas as pd
 		import warnings
 		import labkey
@@ -279,6 +308,7 @@ class Survdat(object):
 		self.pids = pids
 		self.version = version
 		self.impute = impute
+		self.cb = cb
 	
 
 	def quer_ons(self):
@@ -287,6 +317,7 @@ class Survdat(object):
 		Args:
 			pids (list): list of participant ids to include
 			version (str): Data release version
+			cb (boolean): use Cohort Browser instead of Labkey
 
 		Returns:
 			ons (pd.DataFrame): date of death per participant_id
@@ -311,7 +342,8 @@ class Survdat(object):
 		)
 		ons1 = lab_to_df(
 			sql_query=query2,
-			dr=self.version)
+			dr=self.version,
+			cb=self.cb)
 		query3 = (
 			f'''
 			SELECT 
@@ -322,7 +354,8 @@ class Survdat(object):
 		''')
 		ons2 = lab_to_df(
 			sql_query=query3,
-			dr=self.version)
+			dr=self.version, 
+			cb=self.cb)
 
 		ons1.rename(columns={'death_date':'date_of_death'}, inplace=True)
 		ons = ons1.merge(ons2, how='outer')
@@ -339,6 +372,7 @@ class Survdat(object):
 		Args:
 			pids (list): list of participant ids to include
 			version (str): Data release version
+			cb (boolean): use Cohort Browser instead of Labkey
 
 		Returns:
 			hes (pd.DataFrame): date of last interaction per participant_id.
@@ -368,22 +402,26 @@ class Survdat(object):
 
 		apc_lastseen = lab_to_df(
 			sql_query=q_apc,
-			dr=self.version
+			dr=self.version, 
+			cb=self.cb
 			)
 
 		ae_lastseen= lab_to_df(
 			sql_query=q_ae,
-			dr=self.version
+			dr=self.version,
+			cb=self.cb
 			)
 
 		op_lastseen= lab_to_df(
 			sql_query=q_op,
-			dr=self.version
+			dr=self.version,
+			cb=self.cb
 			)
 
 		cc_lastseen= lab_to_df(
 			sql_query=q_cc,
-			dr=self.version
+			dr=self.version,
+			cb=self.cb
 			)
 
 		dfs = [apc_lastseen, ae_lastseen, op_lastseen, cc_lastseen]
@@ -428,7 +466,8 @@ class Survdat(object):
 		''')
 		dod_participant = lab_to_df(
 			sql_query=query1,
-			dr=self.version
+			dr=self.version,
+			cb=self.cb
 			)
 		dod_participant['disease_type'] = translateicd(
 			dod_participant['diagnosis_icd_code'],
@@ -453,7 +492,8 @@ class Survdat(object):
 		''')
 		av_dod_participant = lab_to_df(
 			sql_query=query2,
-			dr=self.version
+			dr=self.version,
+			cb=self.cb
 			)
 		av_dod_participant['disease_type'] = translateicd(
 			av_dod_participant['site_icd10_o2'],
@@ -550,6 +590,7 @@ class Survdat(object):
 			miss_df (pd.DataFrame): Dataframe with 3 columns: 
 			['disease_type', 'participant_id', 'diagnosis_date']
 			Where 'diagnosis_date' is NA.
+			cb (boolean): use Cohort Browser instead of Labkey.
 
 		Returns:
 			pd.DataFrame: Dataframe with imputed diagnosis date filled in.
@@ -563,7 +604,7 @@ class Survdat(object):
 			WHERE 
 				CAST(participant_id AS Char) LIKE '2%'
 			''')
-		par = lab_to_df(query, dr=self.version)
+		par = lab_to_df(query, dr=self.version, cb=self.cb)
 		par = (par
 			.sort_values(['participant_id', 'date_of_consent'], ascending=True)
 			.drop_duplicates(['participant_id'], keep='first')
@@ -573,9 +614,9 @@ class Survdat(object):
 			SELECT	
 				participant_id, disease_type
 			FROM
-				lists.cancer_analysis'''
+				cancer_analysis'''
 		)
-		fullca = lab_to_df(query, dr=self.version)
+		fullca = lab_to_df(query, dr=self.version, cb=self.cb)
 		
 		################################################################
 		# load in full av_dod / 
@@ -591,7 +632,8 @@ class Survdat(object):
 		''')
 		dod_participant = lab_to_df(
 			sql_query=query1,
-			dr=self.version
+			dr=self.version,
+			cb=self.cb
 			)
 		dod_participant['disease_type'] = translateicd(
 			dod_participant['diagnosis_icd_code'],
@@ -614,7 +656,8 @@ class Survdat(object):
 		''')
 		av_dod_participant = lab_to_df(
 			sql_query=query2,
-			dr=self.version
+			dr=self.version,
+			cb=self.cb
 			)
 		av_dod_participant['disease_type'] = translateicd(
 			av_dod_participant['site_icd10_o2'],
@@ -795,6 +838,7 @@ def force_list(iter):
 def query_ctd(
 	df, 
 	version, 
+	cb,
 	genes, 
 	clinsig=['(likely)pathogenic','LoF','path_LoF']):
 	"""Returns TRUE/FALSE for samples in dataframe by querying labkey,
@@ -802,6 +846,7 @@ def query_ctd(
 	Args:
 		df (pd.DataFrame): a pandas dataframe with at a column of participant_id
 		version (str): version of labkey to query, DR 15 or later.
+		cb (boolean): use Cohort Browser instead of Labkey.
 		genes (list): list of gene names in string format.
 		clinsig (list): list of clinical significance to include. default:
 		'(likely)pathogenic','LoF','path_LoF', excluding 'other'
@@ -816,7 +861,7 @@ def query_ctd(
 			gene,
 			relevance
 		FROM
-			lists.cancer_tier_and_domain_variants
+			cancer_tier_and_domain_variants
 		WHERE
 			gene IN {*genes_list,} AND relevance IN {*clinsig,}
 		''')
@@ -827,12 +872,12 @@ def query_ctd(
 			gene,
 			relevance
 		FROM
-			lists.cancer_tier_and_domain_variants
+			cancer_tier_and_domain_variants
 		WHERE
 			gene IN ('{genes_list[0]}') AND relevance IN {*clinsig,}
 		''')
 
-	snvdb = lab_to_df(sqlstr, dr=version)
+	snvdb = lab_to_df(sqlstr, dr=version, cb=cb)
 
 	for strat in genes_list:
 		df[strat] = np.where(
@@ -963,7 +1008,7 @@ if __name__ == '__main__':
 			SELECT 
 				participant_id, disease_type
 			FROM
-				lists.cancer_analysis
+				cancer_analysis
 			WHERE 
 				tumour_type = 'PRIMARY'
 				AND
@@ -975,20 +1020,22 @@ if __name__ == '__main__':
 			SELECT 
 				participant_id, disease_type
 			FROM
-				lists.cancer_analysis
+				cancer_analysis
 			WHERE 
 				tumour_type = 'PRIMARY'
 			''')
 
 	ca_analysis = lab_to_df(
 		sql_query =ca_query,
-		dr=options.version)
+		dr=options.version,
+		cb=options.cohort_browser)
 
 	c = Survdat(
 		ca_analysis,
 		ca_analysis['participant_id'], 
 		options.version, 
-		options.imputate_flag)
+		options.imputate_flag,
+		options.cohort_browser)
 	c.quer_ons()  # get survival data : c.ons
 	c.quer_hes()  # query HES data for date of last follow up : c.hes
 	c.quer_dod()  # get date of diagnosis :c.dod
@@ -1009,6 +1056,7 @@ if __name__ == '__main__':
 	surv_dat = query_ctd(  # loading in snvdb can be slow.
 		df = c.surv_dat,
 		version=options.version,
+		cb=options.cohort_browser,
 		genes=options.genes
 		)
 
