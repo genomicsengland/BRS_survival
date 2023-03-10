@@ -76,7 +76,7 @@ def argparser():
 		help='Title for Kaplan-Meier plot.')
 	# for testing purposes:
 	# argv = '--genes KRAS -s full -o ./test'.split()
-	# args = parser.parse_args(argv)
+	# options = parser.parse_args(argv)
 	options=parser.parse_args()
 	
 	return options
@@ -100,7 +100,7 @@ def lab_to_df(sql_query, dr):
 		server_context,
 		schema_name="lists",
 		sql=sql_query,
-		max_rows=5000000
+		max_rows=50000000
 	)
 	return(pd.DataFrame(results['rows']))
 
@@ -114,7 +114,8 @@ ic_lookup = [  # the ic_lookup regex doesn't function the same in R and python.
 	('COLORECTAL',r"C18[0-9]{0,1}|C20|C19|D010|D012|D011|C17[0-9]{0,1}"
 		r"|C21[0-9]{0,1}|C78$|C784|C785|C788"),  # changed from 
 	('ENDOCRINE',r"C73|C74[0-9]{0,1}|C75[0-9]{0,1}|D093|D44[0-9]{0,1}"),
-	('ENDOMETRIAL_CARCINOMA',r"C53[0-9]{0,1}|C54[0-9]{0,1}|C55[0-9]{0,1}|D070|D069"),
+	('ENDOMETRIAL_CARCINOMA',r"C53[0-9]{0,1}|C54[0-9]{0,1}"
+		r"|C55[0-9]{0,1}|D070|D06[0,1,7,9]{0,1}"),
 	('HAEMONC',r"C81[0-9]{0,1}|C82[0-9]{0,1}|C83[0-9]{0,1}|C84[0-9]{0,1}"
 		r"|C85[0-9]{0,1}|C86[0-9]{0,1}|C88[0-9]{0,1}|C90[0-9]{0,1}|C91[0-9]{0,1}"
 		r"|C92[0-9]{0,1}|C93[0-9]{0,1}|C94[0-9]{0,1}|C95[0-9]{0,1}|C96[0-9]{0,1}|"
@@ -265,6 +266,7 @@ def create_name_map(
 				}_mut'''
 			)
 	return dict(zip(mapping.iloc[:,1], name))
+
 
 class Survdat(object):
 	
@@ -473,22 +475,55 @@ class Survdat(object):
 				)
 			)
 
-		av_dod_participant_merged = (
-			av_dod_participant[[
+		# add in cancer registry data here:
+		query3=(f'''
+		SELECT
+			DISTINCT participant_id, event_date, cancer_site
+		FROM
+			cancer_register_nhsd
+		''')
+		nhsd_dod = lab_to_df(
+			sql_query=query3,
+			dr=self.version
+			)
+		# some of the cancer sites are integers - leading to errors in
+		# translateicd
+		nhsd_dod['cancer_site']= nhsd_dod['cancer_site'].map(str)
+		nhsd_dod.rename(
+			{'event_date':'diagnosis_date'}, 
+			axis=1, 
+			inplace=True
+			)
+		nhsd_dod['disease_type'] = translateicd(
+			nhsd_dod['cancer_site'],
+			lookups=ic_lookup
+			)
+
+		av_dod_participant_merged = av_dod_participant[[
 			'participant_id', 
 			'diagnosis_date',
 			'disease_type'
-			]]
-			.merge(dod_participant[[
+			]].merge(
+				dod_participant[[
+					'disease_type',
+					'participant_id',
+					'diagnosis_date']],
+				how='outer'
+				)
+
+		av_nhsd_dod_participant_merged = (
+			av_dod_participant_merged
+			.merge(nhsd_dod[[
 				'disease_type',
 				'participant_id',
 				'diagnosis_date']],
-				how='outer')
+				how='outer'
+				)
 			.sort_values(['participant_id', 'diagnosis_date'], ascending=True)
 			.drop_duplicates(['participant_id', 'disease_type'], keep='first')
 			)
 
-		self.dod = av_dod_participant_merged
+		self.dod = av_nhsd_dod_participant_merged
 
 
 	def merge_dod(self):
@@ -633,14 +668,48 @@ class Survdat(object):
 				columns={'diagnosisdatebest':'diagnosis_date'}
 				)
 			)
+		# add in cancer registry data here:
+		query3=(f'''
+		SELECT
+			DISTINCT participant_id, event_date, cancer_site
+		FROM
+			cancer_register_nhsd
+		''')
+		nhsd_dod = lab_to_df(
+			sql_query=query3,
+			dr=self.version
+			)
+		# some of the cancer sites are integers - leading to errors in
+		# translateicd
+		nhsd_dod['cancer_site']= nhsd_dod['cancer_site'].map(str)
+		nhsd_dod.rename(
+			{'event_date':'diagnosis_date'}, 
+			axis=1, 
+			inplace=True
+			)
+		nhsd_dod['disease_type'] = translateicd(
+			nhsd_dod['cancer_site'],
+			lookups=ic_lookup
+			)
+		# TODO: increaes ICD10 code regex coverage.
+		# nhsd_dod.loc[
+		# 	nhsd_dod['disease_type']=='OTHER',['cancer_site']
+		# 	].value_counts()
 
-		av_dod_full = (
-			av_dod_participant[[
+		av_dod_half = av_dod_participant[[
 			'participant_id', 
 			'diagnosis_date',
 			'disease_type'
-			]]
-			.merge(dod_participant[[
+			]].merge(dod_participant[[
+				'disease_type',
+				'participant_id',
+				'diagnosis_date']],
+			how='outer'
+			)
+			
+		av_dod_full = (
+			av_dod_half
+			.merge(nhsd_dod[[
 				'disease_type',
 				'participant_id',
 				'diagnosis_date']],
@@ -883,6 +952,7 @@ def kmsurvival(
 	# ngroup = range(0,len(pd.unique(data['group'])))
 	out_d = []
 	if plotting:
+		# ax = plt.subplot(111, box_aspect=0.3) allow adjusting of aspect ratio
 		ax = plt.subplot(111)
 		plt.title(plt_title)
 	df = data.copy()
@@ -914,7 +984,8 @@ def kmsurvival(
 		if plotting:  
 			ax = kmf.plot_survival_function().plot(ax=ax)
 	if plotting:
-		plt.savefig(output+'surv.png',bbox_inches='tight', dpi=300)
+		# TODO allow differently named save (or use title)
+		plt.savefig(output+'surv.png', bbox_inches='tight', dpi=300)
 		plt.close()
 		plt.clf()
 	outdf = pd.DataFrame(out_d)
