@@ -105,6 +105,26 @@ def lab_to_df(sql_query, dr):
 	return(pd.DataFrame(results['rows']))
 
 
+def lab_to_new_df(sqlstr, dr):
+	"""generate an pandas dataframe from labkey sql query for labkey v2.4
+
+	Args:
+		sql_query (str): an sql query as string.
+		dr (str): GEL datarelease version
+	"""
+	from labkey.api_wrapper import APIWrapper
+
+	labkey_server = "labkey-embassy.gel.zone"
+	project_name = dr  # Project folder name
+	contextPath = "labkey"
+	schema = 'lists'
+	api = APIWrapper(labkey_server, project_name, contextPath, use_ssl=True)
+	
+	result = api.query.execute_sql(sql=sqlstr, schema_name=schema)
+
+	return(pd.DataFrame(result['rows']))
+
+
 ic_lookup = [  # the ic_lookup regex doesn't function the same in R and python.
 	('ADULT_GLIOMA',r"C71[0-9]{0,1}|D43[0-4]{0,1}|D32[0-4]{0,1}|D33[0-4]{0,1}"),
 	('BLADDER',r"C67[0-9]{0,1}|D090|D414"),
@@ -159,7 +179,7 @@ def translateicd(icd_vec, lookups=ic_lookup):
 				return value
 		return 'OTHER'
 	# remove trailing 'X' and any '.'
-	icd_vec_clean = [re.sub('X$|\[.\]|[.]' , '', x) for x in icd_vec]
+	icd_vec_clean = [re.sub('X$|\[.\]|[.]' , '', str(x)) for x in icd_vec]
 	return list(map(transicd, icd_vec_clean))
 
 # TODO test allowing of NAN (will they be included in the groups?)
@@ -673,7 +693,7 @@ class Survdat(object):
 		SELECT
 			DISTINCT participant_id, event_date, cancer_site
 		FROM
-			cancer_register_nhsd
+			cancer_registry
 		''')
 		nhsd_dod = lab_to_df(
 			sql_query=query3,
