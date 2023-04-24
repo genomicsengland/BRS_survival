@@ -182,6 +182,7 @@ def translateicd(icd_vec, lookups=ic_lookup):
 	icd_vec_clean = [re.sub('X$|\[.\]|[.]' , '', str(x)) for x in icd_vec]
 	return list(map(transicd, icd_vec_clean))
 
+
 # TODO test allowing of NAN (will they be included in the groups?)
 def assign_groups(dataframe, vars, type='and'):
 	"""assigns groups/labels for survival analysis based on a list of variables.
