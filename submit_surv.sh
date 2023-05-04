@@ -7,22 +7,17 @@
 #BSUB -R "rusage[mem=10000] span[hosts=1]"
 #BSUB -M 8000
 #BSUB -n 1
-#BSUB -cwd "/home/cbouwens/scripts/Survival_analysis/test/"
+#BSUB -cwd .module purge
 
-module purge
-module load lang/miniconda3/2020.04
-conda activate py3pypirev3
+source /resources/conda/miniconda3/envs/pd_lk_survival
 
-python3 /Users/christianbouwens/Documents/Internal/survival/surv_git/survival.py \
+python3 survival.py \
 --genes KRAS TP53 \
 -s and \
 --imputate \
--o /Users/christianbouwens/Documents/Internal/survival/surv_git/test
+-o BRS_test/
 
 
-
-
-#ADD PLOTTING AND TABLE FLAGS
 
 
 # 3 use cases: 
