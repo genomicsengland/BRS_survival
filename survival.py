@@ -16,6 +16,7 @@ import pandas as pd
 import warnings
 import labkey
 import re
+from pathlib import Path
 from functools import reduce
 
 
@@ -89,40 +90,39 @@ def lab_to_df(sql_query, dr):
 		sql_query (str): an sql query as string.
 		dr (str): GEL datarelease version
 	"""
-	server_context = labkey.utils.create_server_context(
-		domain= "labkey-embassy.gel.zone",
-		container_path = dr,
-		context_path = "labkey",
-		use_ssl = True
-	)
+	ver = labkey.__version__
+
+	if ver == '1.2.0':
+		server_context = labkey.utils.create_server_context(
+			domain= "labkey-embassy.gel.zone",
+			container_path = dr,
+			context_path = "labkey",
+			use_ssl = True
+		)
+		
+		results =  labkey.query.execute_sql(
+			server_context,
+			schema_name="lists",
+			sql=sql_query,
+			max_rows=50000000
+		)
+
+	if ver == '2.4.0':
+		from labkey.api_wrapper import APIWrapper
+
+		labkey_server = "labkey-embassy.gel.zone"
+		project_name = dr  # Project folder name
+		contextPath = "labkey"
+		schema = 'lists'
+		api = APIWrapper(
+			labkey_server, 
+			project_name, 
+			contextPath, 
+			use_ssl=True)
+		
+		results = api.query.execute_sql(sql=sql_query, schema_name=schema)
 	
-	results =  labkey.query.execute_sql(
-		server_context,
-		schema_name="lists",
-		sql=sql_query,
-		max_rows=50000000
-	)
 	return(pd.DataFrame(results['rows']))
-
-
-def lab_to_new_df(sqlstr, dr):
-	"""generate an pandas dataframe from labkey sql query for labkey v2.4
-
-	Args:
-		sql_query (str): an sql query as string.
-		dr (str): GEL datarelease version
-	"""
-	from labkey.api_wrapper import APIWrapper
-
-	labkey_server = "labkey-embassy.gel.zone"
-	project_name = dr  # Project folder name
-	contextPath = "labkey"
-	schema = 'lists'
-	api = APIWrapper(labkey_server, project_name, contextPath, use_ssl=True)
-	
-	result = api.query.execute_sql(sql=sqlstr, schema_name=schema)
-
-	return(pd.DataFrame(result['rows']))
 
 
 ic_lookup = [  # the ic_lookup regex doesn't function the same in R and python.
@@ -1043,9 +1043,11 @@ def kmsurvival(
 if __name__ == '__main__':
 
 	options = argparser()
+
 	if options.out[-1] != '/':
 		options.out=options.out+'/'
-
+	Path(options.out).mkdir(parents=True, exists_ok=True)
+	
 	# grab all cancer participants to find those with unknown diagnosis dates
 	# or dates of death.
 	if options.disease_type:
@@ -1085,7 +1087,7 @@ if __name__ == '__main__':
 	c.quer_hes()  # query HES data for date of last follow up : c.hes
 	c.quer_dod()  # get date of diagnosis :c.dod
 	c.merge_dod()  # match date of diagnosis with cohort: c.pid_diag, c.no_diag
-	# only does something if options.imputate_flag is true (--impute)
+	# dod_impute only does something if options.imputate_flag is true (--impute)
 	c.dod_impute()  # impute date of diagnosis from average per disease type c.full_diag
 	c.surv_time()  # use ons, hes, dod and pid_diag for survival data.
 	# c.surv_dat will be the ultimate survival table.
