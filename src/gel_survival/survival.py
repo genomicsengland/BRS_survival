@@ -92,7 +92,7 @@ def lab_to_df(sql_query, dr):
 	"""
 	ver = labkey.__version__
 
-	if ver == '1.2.0':
+	if ver == '1.2.0' or ver == '1.4.0':
 		server_context = labkey.utils.create_server_context(
 			domain= "labkey-embassy.gel.zone",
 			container_path = dr,
@@ -497,11 +497,12 @@ class Survdat(object):
 			)
 
 		# add in cancer registry data here:
+		# Append this based on the data release.
 		query3=(f'''
 		SELECT
 			DISTINCT participant_id, event_date, cancer_site
 		FROM
-			cancer_register_nhsd
+			cancer_registry
 		''')
 		nhsd_dod = lab_to_df(
 			sql_query=query3,
@@ -941,7 +942,7 @@ def kmsurvival(
 	output,  
 	plt_title,
 	map_dict,
-	plotting=True, 
+	plotting=True, # should be changed to['show', 'save', 'None'] 
 	table=True):
 	"""Calculate and plot Kaplan-Meier median survival time using the Lifelines
 	Python package. 
@@ -972,12 +973,14 @@ def kmsurvival(
 	kmf = KaplanMeierFitter()
 	# ngroup = range(0,len(pd.unique(data['group'])))
 	out_d = []
-	if plotting:
+	if plotting is not None:
 		# ax = plt.subplot(111, box_aspect=0.3) allow adjusting of aspect ratio
 		ax = plt.subplot(111)
 		plt.title(plt_title)
 	df = data.copy()
-	df.replace({'group':map_dict}, inplace=True)
+	# this renaming section forces users to rename the strata before the function is run.
+	# a little weird.
+	df.replace({'group':map_dict}, inplace=True)  
 
 	for g in strata:
 		s = (df['group'] == g)
@@ -1002,13 +1005,15 @@ def kmsurvival(
 		)
 		# when not saving the plot only one var is plot.
 		# should we
-		if plotting:  
+		if plotting is not None:  
 			ax = kmf.plot_survival_function().plot(ax=ax)
-	if plotting:
-		# TODO allow differently named save (or use title)
-		plt.savefig(output+'surv.png', bbox_inches='tight', dpi=300)
-		plt.close()
-		plt.clf()
+			if plotting == 'show':
+				plt.show()
+			elif plotting == 'save':
+				# TODO allow differently named save (or use title)
+				plt.savefig(output+'surv.png', bbox_inches='tight', dpi=300)
+				plt.close()
+				plt.clf()
 	outdf = pd.DataFrame(out_d)
 	if table:
 		outdf.to_csv(output+'surv.csv')
@@ -1032,8 +1037,8 @@ def kmsurvival(
 			),
 			axis=1
 	)
-	if not plotting:
-		return kmf.plot_survival_function(), outdf
+	# if not plotting:
+	# 	return kmf.plot_survival_function(), outdf
 	return outdf
 
 
