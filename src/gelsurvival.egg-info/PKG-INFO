@@ -1,5 +1,5 @@
 Metadata-Version: 2.1
-Name: gel-survival
+Name: gelpack
 Version: 1.0.0
 Summary: this package assists in extracting and calculating survival metrics from the Genomics England 100,000 Genomes Project data.
 Author-email: Christian Bouwens <christian.bouwens@genomicsengland.co.uk>
