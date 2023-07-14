@@ -176,6 +176,35 @@ def create_name_map(
 
 ## should this class inherit from the cohort class? or keep them seperate?
 # can you even merge classes? or apply functions to classes that are not defined inside the class?
+# example of brining in a cohort of one class to another.
+# if df == cohort elif df == data.frame.
+# class Participant(object):
+#     def __init__(self, name, level):
+#         self.name = name
+#         self.level = level
+
+# class Team(object):
+#     def __init__(self, name):
+#         self.name = name
+#         self.participants = []
+
+#     def add_participant(self, p):
+#         self.participants.append(p)
+
+# DEMO:
+
+# my_team = Team("Monty Python")
+# p_info = [("Adam", 10e5), ("Joe-bob", -1)]
+# participants = [Participant(name, level) for name, level in p_info]
+
+# for participant in participants:
+#     my_team.add_participant(participant)
+#     # say that 10 times fast....
+
+# In [1]: [p.name for p in my_team.participants]
+# Out[1]: ["Adam", "Joe-bob"]
+
+
 class Survdat(object):
 	
 	def __init__(self, df, pids, version, impute):
