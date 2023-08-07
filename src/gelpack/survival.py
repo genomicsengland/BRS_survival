@@ -213,13 +213,13 @@ class Survdat(object):
 		import labkey
 		import re
 		from functools import reduce
-		from . import lab_to_df
+		from gel_utils import lab_to_df
 
 		self.ca = df
 		self.pids = pids
 		self.version = version
 		self.impute = impute
-	
+	 
 
 	def quer_ons(self):
 		"""Extract the death date from labkey tables for a set of participant_id.
@@ -909,8 +909,7 @@ def kmsurvival(
 					).iloc[:,0].item()
 			}
 		)
-		# when not saving the plot only one var is plot.
-		# should we
+		# TODO bug: when not saving the plot only one var is plot.
 		if plotting is not None:  
 			ax = kmf.plot_survival_function().plot(ax=ax)
 			if plotting == 'show':
