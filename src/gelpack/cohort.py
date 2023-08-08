@@ -5,70 +5,16 @@
 #### BRSC team
 #### generate a GEL cohort from HPO terms and ICD-10 codes
 #### can be applied for cancer as well as rare disease cases.
-#### last update: 2023.06.30
+#### last update: 2023.08.08
 
 
 import pandas as pd
 import numpy as np
 import labkey
 from gelsurvival import gel_utils  # import the lab_to_df function. currently 
+from gel_utils import lab_to_df
 
-# data release version
-version = "main-programme/main-programme_v17_2023-03-30"
 
-# input a dict of hpo-terms and/or icd-10 codes
-cohort1 = {
-	'terms':[
-		"Early onset and familial Parkinson's Disease",
-		"Complex Parkinsonism (includes pallido-pyramidal syndromes)"
-		],
-	'hpo':[
-		'HP:0001300',
-		'HP:0002548',
-		],
-	'icd10':[
-		'Q780',
-		'M80',
-		'M81',
-		'M82'
-		],
-	'cancer_terms':[
-		'COLORECTAL',
-		]
-		}
-
-# making Cohort() a multi-cohort object would defeat the purpose of putting it in a class.
-# just ask researchers to instantiate a cohort class per cohort.
-# we can then combine the data (the classes) to create visualisations.
-# cohort2 = { 
-# 	'A':{
-# 		'icd10':[
-# 			'Q780',
-# 			'M80',
-# 			'M81',
-# 			'M82'
-# 			],
-# 		},
-# 	'B':{
-# 		'hpo':[
-# 			'HP:0001300',
-# 			'HP:0002548',
-# 			],
-# 		'cancer_terms':[
-# 			'COLORECTAL',
-# 			]
-# 			}
-# 		}
-
-# cohort1 = {
-# 	'icd10':[
-# 		'Q780',
-# 		'M80',
-# 		'M81',
-# 		'M82'
-# 		],
-# 		}
-	
 ## is this lookup worth including?
 icd10_lookup =  pd.read_csv(
 	'/Users/christianbouwens/Documents'
@@ -111,10 +57,14 @@ class Cohort(object):
 
 		# if there are no features to create a cohort on - 
 		# return an error.
-		self.icd10s = featdict['icd10']
-		self.hpo = featdict['hpo']
-		self.dterms = featdict['terms']
-		self.cterms = featdict['cancer_terms']
+		if 'icd10' in featdict.keys():
+			self.icd10s = featdict['icd10']
+		if 'hpo' in featdict.keys():
+			self.hpo = featdict['hpo']
+		if 'terms' in featdict.keys():
+			self.dterms = featdict['terms']
+		if 'cancer_terms' in featdict.keys():
+			self.cterms = featdict['cancer_terms']
 		# we could add the cancer disease types here.
 		# can we build a cohort based on morphology/histology codes?
 		# or let people do that themselves and just import the data from pids?
@@ -239,6 +189,7 @@ class Cohort(object):
 			- cancer_registry
 			- rtds
 			- sact
+		
 		the sources queried can be limited using the limit argument.
 		'all', 'hes', 'mort', 'mental_health', 'cancer'.
 
@@ -247,14 +198,6 @@ class Cohort(object):
 			icd-10 codes.
 		"""
 		# TODO: add av_tumour / av_patient to the cancer options.
-		# icd10s = [
-		# 'Q780',
-		# 'M80',
-		# 'M81',
-		# 'M82',
-		# 'F209'
-		# ]
-		# limit=['all', 'hpo']
 
 		if not all(
 			item in [
@@ -539,29 +482,30 @@ class Cohort(object):
 		if any(lim in ['all','cancer'] for lim in limit):
 			####### icd-10 cancer-specific
 			# we should display some kind of warning this is just to gather all known
-			# participants which may have had or get cancer. But not a proper approach
+			# participants which may have had cancer. But not a proper approach
 			# to identify patients for which we have tumour samples.
 			# cancer invest sample pathology
 
 			## the R script is filtering out participants who may have multiple cancers here.
+			# we are keeping duplicate participant ids if they have different cancer codes.
 			path_sql = f'''
 				WITH table AS
 				(
 					SELECT
 						participant_id,
-						x as code
+						x as code_raw
 						
 					FROM
 						z
 				)
 				SELECT 
 					DISTINCT participant_id,
-					code
+					code_raw
 				FROM
 					table
 				WHERE 
-					(REGEXP_REPLACE(code, '\\.', '') LIKE {
-						" OR REGEXP_REPLACE(code, ';.', '') LIKE "
+					(REGEXP_REPLACE(code_raw, '\\.', '') LIKE {
+						" OR REGEXP_REPLACE(code_raw, ';.', '') LIKE "
 						.join(f"'%{i}%'" for i in self.icd10s)
 					})'''.replace(';', '\\')
 
@@ -585,6 +529,10 @@ class Cohort(object):
 				(
 					'sact',
 					'primary_diagnosis'
+				),
+				(
+					'av_tumour',
+					'site_icd10_o2'
 				)
 				]
 
@@ -602,13 +550,13 @@ class Cohort(object):
 
 			cancer_diag = pd.concat(cancer_code_list).reset_index(drop=True)
 			if cancer_diag.size > 0:
-				cancer_diag['code'] = (cancer_diag['diag']
+				cancer_diag['code'] = (cancer_diag['code_raw']
 					.str.replace('.','', regex=False)
 					.str.extract(r'([A-Z][0-9]+)')
 				)
 				cancer_diag = (cancer_diag
 					.drop_duplicates(['participant_id','code'])
-					.drop(['diag'],axis=1)
+					.drop(['code_raw'],axis=1)
 					)
 				collect_icd10_tables.append(cancer_diag)
 			else:
@@ -631,10 +579,10 @@ class Cohort(object):
 		"""Get the age at consent and current age for each participant in the 
 		cohort. This function does go over each source (cancer, icd10, hpo...)
 		individually, which may lead to a few duplicate entries being calculated.
-		But allows for calculating the age of two seperate cohorts A/B at once.
+		But allows for comparison of the source cohorts downstream.
 
 		Returns:
-			dictionary: The keys of which correspond to the keys of the sources,
+			age_table dictionary: The keys of which correspond to the keys of the sources,
 			for each key a pd.dataframe with 'date_of_consent', 'participant_id',
 			'year_of_birth', 'current_age' and 'age_at_consent'. In addition a
 			QC flag has been added - this flags instances where the year_of_birth
@@ -643,9 +591,6 @@ class Cohort(object):
 			were over 100 years old at the date of consent.
 		"""
 		#### Age ####
-		# in considering running this for every element of the cohort.	
-		# yes it would lead to some duplication of pids, 
-		# but it would enable A/B/C cohort annotation too.
 		self.age_table = {}
 		for key, pid in self.pids.items():
 			age_sql = (f'''
@@ -719,15 +664,16 @@ class Cohort(object):
 		"""Get the age at consent and current age for each participant in the 
 		cohort. like age(), this function goes over each source (cancer, icd10, hpo...)
 		individually, which may lead to a few duplicate entries being calculated.
-		But allows for calculating the age of two seperate cohorts A/B at once.
+		But allows for comparison of the source cohorts downstream.
 
 		Returns:
-			dictionary: The keys of which correspond to the keys of the sources,
-			for each key a pd.dataframe with 'participant_id' and 'predicted_ancestry'.
-			ancestries are set by the highest scoring predicted ancestry in 
-			aggregate_gvcf_sample_stats. If no single score was higher than 0.8
-			the ancestry is set to unassigned (UNA). If the participant is not
-			part of this table the ancestry is set to unknown (UNO).
+			ancestry_table (dictionary): The keys of which correspond to the keys of 
+			the sources, for each key a pd.dataframe with 'participant_id' 
+			and 'predicted_ancestry'. ancestries are set by the highest scoring
+			predicted ancestry in aggregate_gvcf_sample_stats. If no single 
+			score was higher than 0.8 the ancestry is set to unassigned (UNA). 
+			If the participant is not part of this table the ancestry is set 
+			to unknown (UNO).
 		"""
 		## ancestry  ##
 		self.ancestry_table = {}
@@ -750,7 +696,7 @@ class Cohort(object):
 				dr=self.version
 				)
 			ancestry['predicted_ancestry'] = pd.NA
-			# idxmax returns the column with the greates value for each row.
+			# idxmax returns the column-name with the greates value for each row.
 			ancestry['predicted_ancestry'].fillna(
 				ancestry[[
 					'pred_african_ancestries',
@@ -781,7 +727,7 @@ class Cohort(object):
 				'pred_unassigned':'UNA'
 				}, inplace=True
 				)
-				
+			# capture which participants we are missing so we can assign them unknown
 			miss_par = [
 				p for p in pid if 
 					(p not in list(ancestry['participant_id']))
@@ -798,7 +744,11 @@ class Cohort(object):
 
 
 	def sex(self):
+		"""query the labkey tables for phenotypic sex per participant_id.
+		This data is the participant's stated sex by the clinician at the GMC.
+		"""
 		## Sex ##
+		## TODO add kayotype and illumina ploidy as sex query options.
 		self.sex_table = {}
 
 		for key, pid in self.pids.items():
@@ -825,7 +775,7 @@ class Cohort(object):
 			version (str): Data release version
 
 		Returns:
-			ons (pd.DataFrame): date of death per participant_id
+			mortality_table (pd.DataFrame): date of death per participant_id
 		"""
 
 		# import date_of_death per participant_id from 'mortality'
@@ -859,11 +809,28 @@ class Cohort(object):
 				dr=self.version)
 
 			ons1.rename(columns={'death_date':'date_of_death'}, inplace=True)
-			ons = ons1.merge(ons2, how='outer')
-			ons.sort_values(by='date_of_death', ascending=True, inplace=True)
-			ons.drop_duplicates(subset='participant_id', keep='first', inplace=True)
-			self.mortality_table[key] = ons
+			# cohorts may have every / most participants alive
+			# if one of the two tables is empty the merge will fail, hence:
+			check_size = [ons1.size > 0, ons2.size > 0]
+			if sum(check_size) == 0:  # no data in tables
+				self.warnings.warn("No participants found in mortality tables.")
+			elif sum(check_size) == 2: # both tables have data
+				ons = (ons1.merge(
+						ons2, 
+						how='outer')
+					.sort_values(
+						by='date_of_death', 
+						ascending=True)
+					.drop_duplicates(
+						subset='participant_id', 
+						keep='first')
+				)
+				self.mortality_table[key] = ons
+			elif sum(check_size) == 1:  # only one of the two lists has got data.
+				res = [[ons1, ons2][i] for i, val in enumerate(check_size) if val]
+				self.mortality_table[key] = res[0]  # unlisting the datarame.
 
+				
 
 	################ summarysing the cohort ##################
 	def concat_cohort(cls, dc):
@@ -979,86 +946,87 @@ class Cohort(object):
 			)
 
 		# participant counts per searched term / ontology
-		# count_dict = {}  # this is already part of summary_ont now.
-		# for key, pid in cohort.pids.items():
-		# 	count_dict[key]=len(pid.drop_duplicates())
-		
-		# check which keys have been included in the cohort.
+		# count_dict = {} is already part of summary_ont now (n_unique_participants).
+		# vcount should summarize the counts for each resource.		
 		self.ont_vcount = {}
-		for key in ['dterm', 'hpo', 'cterm' , 'icd10']:
-			if key in self.pids.keys():
-				if key == 'dterm':
-					self.ont_vcount[key] = (self.dterm_table 
-						.drop_duplicates([
-							'participant_id',
-							'normalised_specific_disease'])
-						.normalised_specific_disease
-						.value_counts()
-					)  
-				elif key == 'hpo':
-					hpo_uniq = (self.hpo_table
-						.drop_duplicates([
-							'participant_id',
-							'normalised_hpo_id'
-							])
+		if all([k in self.pids.keys() for k in ['dterm','hpo','cterm','icd10']]):
+			raise RuntimeError('No valid cohorts to summarize found')
+		else:
+			# check which keys have been included in the cohort.
+			for key in ['dterm', 'hpo', 'cterm' , 'icd10']:
+				if key in self.pids.keys():
+					if key == 'dterm':
+						self.ont_vcount[key] = (self.dterm_table 
+							.drop_duplicates([
+								'participant_id',
+								'normalised_specific_disease'])
+							.normalised_specific_disease
+							.value_counts()
+						)  
+					elif key == 'hpo':
+						hpo_uniq = (self.hpo_table
+							.drop_duplicates([
+								'participant_id',
+								'normalised_hpo_id'
+								])
+								)
+						hpo_uniq['term'] = (hpo_uniq['normalised_hpo_id'] 
+							+ ' (' 
+							+ hpo_uniq['normalised_hpo_term']+')'
 							)
-					hpo_uniq['term'] = (hpo_uniq['normalised_hpo_id'] 
-						+ ' (' 
-						+ hpo_uniq['normalised_hpo_term']+')'
+						self.ont_vcount[key] = hpo_uniq.term.value_counts()  # return to self.
+					# related to cancer -> is this how we would go about creating a
+					# cancer cohort?
+					# TODO: add a check for icd-10 codes (confirm diagnosis)
+					# TODO: add a search for study_abbreviation.
+					# TODO: add a ICD-10 -> sample / option.
+					elif key == 'cterm':  
+						self.ont_vcount[key] = (self.cterm_table
+							.drop_duplicates([
+								'participant_id', 
+								'cancer_disease_type'
+								])
+							.cancer_disease_type
+							.value_counts()
 						)
-					self.ont_vcount[key] = hpo_uniq.term.value_counts()  # return to self.
-				
-				# TODO: add a check for icd-10 codes (confirm diagnosis)
-				# TODO: add a search for study_abbreviation.
-				# TODO: add a ICD-10 -> sample / option.
-				elif key == 'cterm':  
-					self.ont_vcount[key] = (self.cterm_table
-						.drop_duplicates([
-							'participant_id', 
-							'cancer_disease_type'
-							])
-						.cancer_disease_type
-						.value_counts()
-					)
-				elif key == 'icd10':
-					# return simple codes
-					un_icd10 = cohort.icd10_table.drop_duplicates([
-						'participant_id',
-						'code'
-					])
-					full_icd10 = un_icd10.merge(
-						icd10_lookup, 
-						on='code',
-						how='left')
-					self.ont_vcount[key+'_full'] = (
-						full_icd10
-							.meaning
-							.value_counts(dropna=False)
-						)
-					simple_icd10 = un_icd10
-					simple_icd10['simple_code'] = (un_icd10['code']
-						.str.extract(r'([A-Z][0-9]{2})')
-						)
-					self.ont_vcount[key+'_simple'] = (
-						simple_icd10
-							.simple_code
-							.value_counts(dropna=False)
-							.reset_index()
+					elif key == 'icd10':
+						# return simple codes
+						un_icd10 = self.icd10_table.drop_duplicates([
+							'participant_id',
+							'code'
+						])
+						full_icd10 = un_icd10.merge(
+							icd10_lookup, 
+							on='code',
+							how='left')
+						self.ont_vcount[key+'_full'] = (
+							full_icd10
+								.meaning
+								.value_counts(dropna=False)
 							)
-					# generate a matrix covering the overlap of ICD-10 codes
-					# and its association with multiple participants.
-					parts = un_icd10.participant_id.value_counts().reset_index()
-					multparts = parts[parts['participant_id']>1].iloc[:,0].unique()
-					self.icd10_overlap_matrix = (
-						simple_icd10.loc[
-							simple_icd10['participant_id'].isin(multparts)
-							]
-						.groupby(['participant_id','simple_code'])
-						.size()
-						).unstack()
+						simple_icd10 = un_icd10
+						simple_icd10['simple_code'] = (un_icd10['code']
+							.str.extract(r'([A-Z][0-9]{2})')
+							)
+						self.ont_vcount[key+'_simple'] = (
+							simple_icd10
+								.simple_code
+								.value_counts(dropna=False)
+								.reset_index()
+								)
+						# generate a matrix covering the overlap of ICD-10 codes
+						# and its association with multiple participants.
+						parts = un_icd10.participant_id.value_counts().reset_index()
+						multparts = parts[parts['participant_id']>1].iloc[:,0].unique()
+						self.icd10_overlap_matrix = (
+							simple_icd10.loc[
+								simple_icd10['participant_id'].isin(multparts)
+								]
+							.groupby(['participant_id','simple_code'])
+							.size()
+							).unstack()
 					
-			else:
-				raise RuntimeError('No valid cohorts to summarize found.')
+
 								
 
 		# number of participants overlapping multiple ontologies.
@@ -1068,27 +1036,6 @@ class Cohort(object):
 		# use functions defined in gel_vis.py
 
 
-
-
-
-
-cancer_diag['code'] = (cancer_diag['diag']
-	.str.replace('.','', regex=False)
-	.str.extract(r'([A-Z][0-9]+)')
-)
-cancer_diag = (cancer_diag
-    .drop_duplicates(['participant_id','code'])
-    .drop(['diag'],axis=1)
-    )
-
-
-# figure for the age:
-import matplotlib.pyplot as plt
-plt.close()
-plt.subplot()
-age_df['age_at_consent'].hist(bins=20)
-plt.savefig('/Users/christianbouwens/Documents//Queries/rare_disease/date_hist.png')
-plt.close()
 
 ## utilities for figures.
 ## apply those utilities to gather figures.

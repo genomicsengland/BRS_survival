@@ -1,23 +1,14 @@
 import pandas
 
+
+## create a cohort 
 cohort1 = {
 	'terms':[
-		"Early onset and familial Parkinson's Disease",
-		"Complex Parkinsonism (includes pallido-pyramidal syndromes)"
-		],
-	'hpo':[
-		'HP:0001300',
-		'HP:0002548',
+		"Osteogenesis imperfecta",
 		],
 	'icd10':[
-		'Q780',
-		'M80',
-		'M81',
-		'M82'
+		'Q780'
 		],
-	'cancer_terms':[
-		'COLORECTAL',
-		]
 		}
 	
 version = "main-programme/main-programme_v17_2023-03-30"
@@ -48,7 +39,6 @@ cohort.icd10_table
 cohort.age()
 cohort.age_table
 
-
 cohort.ancestry()
 cohort.ancestry_table
 
@@ -57,7 +47,6 @@ cohort.sex_table
 
 cohort.quer_ons()
 cohort.mortality_table
-
 
 cohort.summary_stats()
 cohort.summary
@@ -69,59 +58,49 @@ cohort.ont_vcount['icd10_full']
 cohort.ont_vcount['icd10_simple']
 cohort.icd10_overlap_matrix
 
+cohort.pids.keys()
+############# testing cancer cohort creation ################
+version = "main-programme/main-programme_v17_2023-03-30"
 
-# te inflated counts are probably coming from the overlap. Where multiple ICD-10 codes are differentiationg patients multiple times.
-# icd_coh1 = icd10
-cohort1 = c1
-icd_coh1 = icd10.copy()
+# input a dict of hpo-terms and/or icd-10 codes
+# we can select samples based on ICD-10 codes.
+# cancer_terms
+# study abbreviations
+# 
+# and modify these with histology codes. (incl, excl)
+# 
+cohort2_dict = {
+	'icd10':[
+		'C349',
+		],
+	'cancer_terms':[
+		'LUNG',
+        ],
+    'cancer_abbr':[
+        'LUAD',
+        'LUSC',
+        'LUG'
+        ],
+# this can get a bit murky - as histology-codes are tied to particular disease types.
+# if these are not included we can assume we want all the histology types for a study abbreviation.
+    'abbr_histology_incl':[
+        ('LUG','8046/3')
+        ],
+    'abbr_histology_excl':[]
+}
 
-icd_coh1.code.value_counts()
-# this can be one of the experts. (as an excel sheet)
-icd_coh1.groupby(['participant_id', 'code']).size()
+cohort2 = Cohort(featdict=cohort2_dict, version=version)
 
 
-icd_coh1.loc[icd_coh1['code']=='Q780']
+cohort2.get_icd10_pids(limit=['all'])
+cohort2.icd10_table
+cohort2.get_cterm_pids()
+cohort2.cterm_table
 
-icd_coh1.loc[(
-    (icd_coh1['code']=='Q780')
-    & (~icd_coh1['participant_id'].isin(icd_coh2['participant_id']))
-    )]
-
-cohort1 = c2
-
-icd_coh2 = icd10.copy()
-
-icd_coh2.code.value_counts()
-
-icd_coh1.groupby(['code','participant_id']).size().unstack()
-icd10['code'].value_counts()
-
-### inlcude in cohort.py.
-
-icd10.loc[icd10['participant_id']==111001038]
-
-# how come I'm finding more of the Q780 participants in the multi search
-# compared to the single search?
-len(icd_coh1.loc[icd_coh1['code']=='Q780', 'participant_id'].unique())
-len(icd_coh2['participant_id'].unique())
-
-# welke patients zitten in coh1 die niet in coh2 zitten?
-
-missing_pats = icd_coh1.loc[(
-    (icd_coh1['code']=='Q780')
-    & (~icd_coh1['participant_id'].isin(icd_coh2['participant_id']))
-    )]
-
-# lets look at the diagcodes for these participants if we load in c1
-
-(icd10['diag_all']
-    .reset_index(drop=True)
-    .str.extractall(p)
-    )
-
-icd10.loc[icd10['participant_id'].isin(
-    [115017283,111000073, 111000762,]),'diag_all'].str.extractall(p)].unstack()
-
-icd10['diag_all'].str.extractall(p)
-
-# it was the reset_index that was missing.
+# get all participant ids associated with 
+# icd-10 -> we don't know if we have a sample and/or if this sample is for this specific icd-10 code
+# cancer_term -> cancer_participant_disease: not that accurate, and we don't kow if we a participant has a sample.
+# cancer_abbr -> only availabe in cancer_analysis. They are more accurate than cancer_terms + we have a sample.
+#              -> we may want to specify a specfic histology to include / exclude for a cohort. 
+#                   - are these only associated with ICD-10 and/ or study_abbreviations? 
+#                   - can we do this based on cancer analysis or do we need to grab our secondary data resources?

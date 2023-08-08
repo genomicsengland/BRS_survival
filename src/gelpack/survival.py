@@ -558,10 +558,10 @@ class Survdat(object):
 		# diagnosis based on ALL participants
 		################################################################
 		query1 =(f'''
-		SELECT 
-			DISTINCT participant_id, diagnosis_date, diagnosis_icd_code
-		FROM
-			cancer_participant_tumour
+			SELECT 
+				DISTINCT participant_id, diagnosis_date, diagnosis_icd_code
+			FROM
+				cancer_participant_tumour
 		''')
 		dod_participant = lab_to_df(
 			sql_query=query1,
