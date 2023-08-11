@@ -7,13 +7,17 @@ cohort1 = {
 		"Osteogenesis imperfecta",
 		],
 	'icd10':[
-		'Q780'
+		'Q780',
+		'M81'
 		],
 		}
 	
 version = "main-programme/main-programme_v17_2023-03-30"
 
-cohort = Cohort(featdict=cohort1, version = version)
+cohort = Cohort(
+	featdict=cohort1, 
+	version = version, 
+	name='Bone')
 
 
 cohort.get_term_pids()
@@ -58,7 +62,9 @@ cohort.ont_vcount['icd10_full']
 cohort.ont_vcount['icd10_simple']
 cohort.icd10_overlap_matrix
 
-cohort.pids.keys()
+cohort.concat_all()
+cohort.all_age
+
 ############# testing cancer cohort creation ################
 version = "main-programme/main-programme_v17_2023-03-30"
 
@@ -89,14 +95,27 @@ cohort2_dict = {
     'abbr_histology_excl':[]
 }
 
-cohort2 = Cohort(featdict=cohort2_dict, version=version)
+cohort2 = Cohort(
+	featdict=cohort2_dict, 
+	version=version,
+	name='NSCLC')
 
 
 cohort2.get_icd10_pids(limit=['all'])
 cohort2.icd10_table
 cohort2.get_cterm_pids()
 cohort2.cterm_table
+cohort2.age()
+cohort2.ancestry()
+cohort2.sex()
+cohort2.quer_ons()
+cohort2.concat_all()
 
+# visualise the single cohort.
+
+import gel_vis
+fig2 = vis_cohorts(cohort, show=False)
+fig2.show()
 # get all participant ids associated with 
 # icd-10 -> we don't know if we have a sample and/or if this sample is for this specific icd-10 code
 # cancer_term -> cancer_participant_disease: not that accurate, and we don't kow if we a participant has a sample.

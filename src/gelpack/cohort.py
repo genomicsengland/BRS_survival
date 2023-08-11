@@ -7,11 +7,10 @@
 #### can be applied for cancer as well as rare disease cases.
 #### last update: 2023.08.08
 
-
 import pandas as pd
 import numpy as np
 import labkey
-from gelsurvival import gel_utils  # import the lab_to_df function. currently 
+from gelsurvival import gel_utils  # import the lab_to_df function.
 from gel_utils import lab_to_df
 
 
@@ -23,10 +22,6 @@ icd10_lookup =  pd.read_csv(
 	usecols=['coding', 'meaning']
 	).rename({'coding':'code'}, axis=1)
 
-# mask function:
-def maskfunc(x):
-	np.where(1 <= x <= 4, -999, x )
-
 
 class Cohort(object):
 
@@ -36,9 +31,9 @@ class Cohort(object):
 	import re  # likewise, we don't use re atm.
 	# from gelpack.gel_utils import lab_to_df
 	# from gel_utils import lab_to_df  this errors out because the package is not formed correctly?
-
 	
-	def __init__(self, featdict, version):
+	
+	def __init__(self, featdict, version, name=None):
 		
 
 		# check if the featdict has correctly been generated.
@@ -70,6 +65,7 @@ class Cohort(object):
 		# or let people do that themselves and just import the data from pids?
 		self.version = version
 		self.pids = {}
+		self.name = name
 
 	################# functions building the cohort ######################
 	def get_term_pids(self):
@@ -189,6 +185,7 @@ class Cohort(object):
 			- cancer_registry
 			- rtds
 			- sact
+			- av_tumour
 		
 		the sources queried can be limited using the limit argument.
 		'all', 'hes', 'mort', 'mental_health', 'cancer'.
@@ -825,10 +822,17 @@ class Cohort(object):
 						subset='participant_id', 
 						keep='first')
 				)
-				self.mortality_table[key] = ons
+				tmp_mort = pd.merge(pid, ons, on='participant_id', how='left')
+				tmp_mort['status'] = np.where(
+					tmp_mort['date_of_death'].isna(), 'Alive', 'Deceased')
+
+				self.mortality_table[key] = tmp_mort
 			elif sum(check_size) == 1:  # only one of the two lists has got data.
 				res = [[ons1, ons2][i] for i, val in enumerate(check_size) if val]
-				self.mortality_table[key] = res[0]  # unlisting the datarame.
+				tmp_mort = pd.merge(pid, res[0], on='participant_id', how='left')
+				tmp_mort['status'] = np.where(
+					tmp_mort['date_of_death'].isna(), 'Alive', 'Deceased')
+				self.mortality_table[key] = tmp_mort  # unlisting the datarame.
 
 				
 
@@ -881,21 +885,23 @@ class Cohort(object):
 		ancestry_distribution.columns = ancestry_distribution.iloc[0]
 		ancestry_distribution.drop(ancestry_distribution.index[0], inplace=True)
 
-		percent_mort = len(
-			[x for x in list(pid) if x in list(mort['participant_id'])]
-			) / len(pid)
-		
+		# changed the structure of the mortality table so no longer needed,
+		# percent_mort = len(
+		# 	[x for x in list(pid) if x in list(mort['participant_id'])]
+		# 	) / len(pid)
+
 		summary = pd.DataFrame(
 			{
 			'n_unique_participants':len(pid),
 			'mean_consent_age':np.mean(age['age_at_consent']),
 			'std_consent_age':np.std(age['age_at_consent']),
 			'mean_current_age':np.mean(age['current_age']),
-			'std_consent_age':np.std(age['current_age']),
-			'percent_female':
+			'std_current_age':np.std(age['current_age']),
+			'fraction_female':
 				sex['sex'].value_counts(normalize=True)[0],
 				  # alphabetically ordered.
-			'percent_diseased': percent_mort
+			'fraction_deceased': 
+				mort['status'].value_counts(normalize=True)[1]
 			}, index=[0])
 		
 		summary_anc = pd.concat(
@@ -906,6 +912,13 @@ class Cohort(object):
 			axis=1)
 
 		return summary_anc
+	
+	def concat_all(self):
+		self.all_pids = self.concat_cohort(self.pids)
+		self.all_age = self.concat_cohort(self.age_table)
+		self.all_ancestry = self.concat_cohort(self.ancestry_table)
+		self.all_sex = self.concat_cohort(self.sex_table)
+		self.all_mort = self.concat_cohort(self.mortality_table)
 
 	def summary_stats(self):
 	
@@ -914,7 +927,7 @@ class Cohort(object):
 		all_age = self.concat_cohort(self.age_table)
 		all_ancestry = self.concat_cohort(self.ancestry_table)
 		all_sex = self.concat_cohort(self.sex_table)
-		all_mort = self.concat_cohort(self.mortality_table)
+		all_mortality = self.concat_cohort(self.mortality_table)
 
 		self.summary = self.summarize(
 			pid=all_pids,
@@ -924,9 +937,8 @@ class Cohort(object):
 			sex=all_sex
 			)
 		
-		# add missingness.
+		# TODO add missingness.
 
-	# is this what we want to do here, not just get counts per source?
 	def ontology_stats(self):
 		summ_dict = {}
 		for key, pid in self.pids.items():
@@ -1026,15 +1038,6 @@ class Cohort(object):
 							.size()
 							).unstack()
 					
-
-								
-
-		# number of participants overlapping multiple ontologies.
-
-
-	################ visualising the cohort ##################
-		# use functions defined in gel_vis.py
-
 
 
 ## utilities for figures.
