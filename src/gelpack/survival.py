@@ -4,7 +4,7 @@
 #### BRS team
 #### generate Kaplann-meier survival curves on domain variants and
 #### disease types.
-#### last update: 2023.01.30
+#### last update: 2023.06.30
 
 #########################
 '''TODO
@@ -13,7 +13,7 @@
 import argparse
 import numpy as np
 import pandas as pd
-import warnings
+from gelpack import gel_utils
 import labkey
 import re
 from pathlib import Path
@@ -83,47 +83,6 @@ def argparser():
 	return options
 
 
-def lab_to_df(sql_query, dr):
-	"""generate an pandas dataframe from labkey sql query
-
-	Args:
-		sql_query (str): an sql query as string.
-		dr (str): GEL datarelease version
-	"""
-	ver = labkey.__version__
-
-	if ver == '1.2.0':
-		server_context = labkey.utils.create_server_context(
-			domain= "labkey-embassy.gel.zone",
-			container_path = dr,
-			context_path = "labkey",
-			use_ssl = True
-		)
-		
-		results =  labkey.query.execute_sql(
-			server_context,
-			schema_name="lists",
-			sql=sql_query,
-			max_rows=50000000
-		)
-
-	if ver == '2.4.0':
-		from labkey.api_wrapper import APIWrapper
-
-		labkey_server = "labkey-embassy.gel.zone"
-		project_name = dr  # Project folder name
-		contextPath = "labkey"
-		schema = 'lists'
-		api = APIWrapper(
-			labkey_server, 
-			project_name, 
-			contextPath, 
-			use_ssl=True)
-		
-		results = api.query.execute_sql(sql=sql_query, schema_name=schema)
-	
-	return(pd.DataFrame(results['rows']))
-
 
 ic_lookup = [  # the ic_lookup regex doesn't function the same in R and python.
 	('ADULT_GLIOMA',r"C71[0-9]{0,1}|D43[0-4]{0,1}|D32[0-4]{0,1}|D33[0-4]{0,1}"),
@@ -184,80 +143,6 @@ def translateicd(icd_vec, lookups=ic_lookup):
 
 
 # TODO test allowing of NAN (will they be included in the groups?)
-def assign_groups(dataframe, vars, type='and'):
-	"""assigns groups/labels for survival analysis based on a list of variables.
-
-
-	Args:
-		dataframe (pd.DataFrame): A pandas dataframe with samples / participants 
-			their survival time, censoring and variables to stratify on.
-		vars (list): list of variable names in string format, corresponding to 
-			columns of boolean series (if a var is True or False in a sample)
-			in dataframe. 
-		type (str, optional): determines how the groups are assigned:
-			'and': binary groups (1, 2) where var1 AND var2 AND..var* are True.
-			'or': binary groups where var1 OR var2 OR var* are True.
-			'full': groups on each possible iteration of vars. 
-			Defaults to 'and'.
-	Returns:
-		pd.series of grouping assigned as group_1, group_2, group_n
-	"""	
-	# check if each var is indeed in dataframe
-	dataframe=dataframe.copy()
-	for var in vars:
-		if not var in dataframe:
-			raise ValueError(
-				f'{var} should only include columns in dataframe.'
-				)
-		# if dataframe[var].isna().any():
-			# raise ValueError(
-			# 	f'{var} contains NA values, only True/False allowed'
-			# 	)
-	# dealing with np.nan values:
-	# this depends on the type
-	# 'and' = any of the vars group = unknown
-	# 'or' = all of the vars group = unknown
-	# 'full' = no need to exclude the nan values.
-	if type == 'and':
-		nan_frame = pd.DataFrame()
-		nan_frame = dataframe.loc[dataframe[vars].isna().any(axis=1)]
-		nan_frame['group'] = 'unknown'
-		dataframe.dropna(subset=vars, how='any', axis=0, inplace=True)
-	if type == 'or':
-		nan_frame = pd.DataFrame()
-		nan_frame = dataframe.loc[dataframe[vars].isna().all(axis=1)]
-		nan_frame['group'] = 'unknown'
-		dataframe.dropna(subset=vars, how='all', axis=0,inplace=True)
-	
-	# setting up the grouping
-	if type=='and':
-		dataframe['group'] = (dataframe[vars]
-			.all(axis=1)
-			# here we could assign group names instead. taken from Strata.
-			# although, it would be neater if the group names can be assigned
-			# through the mapping file or a dictionary?
-			.replace({True: 'group_1', False: 'group_2'})  
-		)
-		dataframe = pd.concat([dataframe,nan_frame])
-		# return dataframe('group')
-	elif type=='or':
-		dataframe['group'] = (dataframe[vars]
-			.any(axis=1)
-			.replace({True: 'group_1', False: 'group_2'})
-		)
-		# return dataframe['group']
-		dataframe = pd.concat([dataframe,nan_frame])
-	elif type=='full':
-		dataframe['combination'] = dataframe[vars].agg(tuple, axis=1)
-		dataframe['group'] = dataframe['combination'].factorize()[0]
-		# dataframe.groupby(['snv1','snv2'], sort=False).ngroup()
-		mapping = dataframe[['combination','group']].drop_duplicates()
-		print(mapping)
-		return dataframe, mapping
-	else:
-		raise ValueError(f'Unrecognized type: {type}.')
-
-	return dataframe
 
 	# string joining based on the True / False combinations.
 	# all False should be WT, handled seperately as the zip will be empty.
@@ -289,6 +174,37 @@ def create_name_map(
 	return dict(zip(mapping.iloc[:,1], name))
 
 
+## should this class inherit from the cohort class? or keep them seperate?
+# can you even merge classes? or apply functions to classes that are not defined inside the class?
+# example of brining in a cohort of one class to another.
+# if df == cohort elif df == data.frame.
+# class Participant(object):
+#     def __init__(self, name, level):
+#         self.name = name
+#         self.level = level
+
+# class Team(object):
+#     def __init__(self, name):
+#         self.name = name
+#         self.participants = []
+
+#     def add_participant(self, p):
+#         self.participants.append(p)
+
+# DEMO:
+
+# my_team = Team("Monty Python")
+# p_info = [("Adam", 10e5), ("Joe-bob", -1)]
+# participants = [Participant(name, level) for name, level in p_info]
+
+# for participant in participants:
+#     my_team.add_participant(participant)
+#     # say that 10 times fast....
+
+# In [1]: [p.name for p in my_team.participants]
+# Out[1]: ["Adam", "Joe-bob"]
+
+
 class Survdat(object):
 	
 	def __init__(self, df, pids, version, impute):
@@ -297,12 +213,13 @@ class Survdat(object):
 		import labkey
 		import re
 		from functools import reduce
+		from gel_utils import lab_to_df
 
 		self.ca = df
 		self.pids = pids
 		self.version = version
 		self.impute = impute
-	
+	 
 
 	def quer_ons(self):
 		"""Extract the death date from labkey tables for a set of participant_id.
@@ -497,11 +414,12 @@ class Survdat(object):
 			)
 
 		# add in cancer registry data here:
+		# Append this based on the data release.
 		query3=(f'''
 		SELECT
 			DISTINCT participant_id, event_date, cancer_site
 		FROM
-			cancer_register_nhsd
+			cancer_registry
 		''')
 		nhsd_dod = lab_to_df(
 			sql_query=query3,
@@ -509,7 +427,7 @@ class Survdat(object):
 			)
 		# some of the cancer sites are integers - leading to errors in
 		# translateicd
-		nhsd_dod['cancer_site']= nhsd_dod['cancer_site'].map(str)
+		nhsd_dod['cancer_site'] = nhsd_dod['cancer_site'].map(str)
 		nhsd_dod.rename(
 			{'event_date':'diagnosis_date'}, 
 			axis=1, 
@@ -640,10 +558,10 @@ class Survdat(object):
 		# diagnosis based on ALL participants
 		################################################################
 		query1 =(f'''
-		SELECT 
-			DISTINCT participant_id, diagnosis_date, diagnosis_icd_code
-		FROM
-			cancer_participant_tumour
+			SELECT 
+				DISTINCT participant_id, diagnosis_date, diagnosis_icd_code
+			FROM
+				cancer_participant_tumour
 		''')
 		dod_participant = lab_to_df(
 			sql_query=query1,
@@ -868,18 +786,7 @@ class Survdat(object):
 
 		self.surv_dat = surv_data
 
-
-def force_list(iter):
-	# a test to make sure the gene is in a list.
-	# so that a single gene is not parsed like 'K', 'R', 'A', 'S'
-	try:
-		from collections.abc import Iterable
-	except ImportError:
-		from collections import Iterable
-
-	if not isinstance(iter, Iterable) or isinstance(iter, str):
-		iter = [iter]
-	return iter                   
+# force list                
 
 
 def query_ctd(
@@ -896,7 +803,7 @@ def query_ctd(
 		clinsig (list): list of clinical significance to include. default:
 		'(likely)pathogenic','LoF','path_LoF', excluding 'other'
 	"""
-
+	from . import force_list
 	genes_list = force_list(genes)
 
 	if len(genes_list) > 1:
@@ -941,7 +848,7 @@ def kmsurvival(
 	output,  
 	plt_title,
 	map_dict,
-	plotting=True, 
+	plotting=True, # should be changed to['show', 'save', 'None'] 
 	table=True):
 	"""Calculate and plot Kaplan-Meier median survival time using the Lifelines
 	Python package. 
@@ -972,12 +879,14 @@ def kmsurvival(
 	kmf = KaplanMeierFitter()
 	# ngroup = range(0,len(pd.unique(data['group'])))
 	out_d = []
-	if plotting:
+	if plotting is not None:
 		# ax = plt.subplot(111, box_aspect=0.3) allow adjusting of aspect ratio
 		ax = plt.subplot(111)
 		plt.title(plt_title)
 	df = data.copy()
-	df.replace({'group':map_dict}, inplace=True)
+	# this renaming section forces users to rename the strata before the function is run.
+	# a little weird.
+	df.replace({'group':map_dict}, inplace=True)  
 
 	for g in strata:
 		s = (df['group'] == g)
@@ -1000,15 +909,16 @@ def kmsurvival(
 					).iloc[:,0].item()
 			}
 		)
-		# when not saving the plot only one var is plot.
-		# should we
-		if plotting:  
+		# TODO bug: when not saving the plot only one var is plot.
+		if plotting is not None:  
 			ax = kmf.plot_survival_function().plot(ax=ax)
-	if plotting:
-		# TODO allow differently named save (or use title)
-		plt.savefig(output+'surv.png', bbox_inches='tight', dpi=300)
-		plt.close()
-		plt.clf()
+			if plotting == 'show':
+				plt.show()
+			elif plotting == 'save':
+				# TODO allow differently named save (or use title)
+				plt.savefig(output+'surv.png', bbox_inches='tight', dpi=300)
+				plt.close()
+				plt.clf()
 	outdf = pd.DataFrame(out_d)
 	if table:
 		outdf.to_csv(output+'surv.csv')
@@ -1032,8 +942,8 @@ def kmsurvival(
 			),
 			axis=1
 	)
-	if not plotting:
-		return kmf.plot_survival_function(), outdf
+	# if not plotting:
+	# 	return kmf.plot_survival_function(), outdf
 	return outdf
 
 
