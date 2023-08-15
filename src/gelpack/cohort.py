@@ -7,34 +7,17 @@
 #### can be applied for cancer as well as rare disease cases.
 #### last update: 2023.08.08
 
+
 import pandas as pd
 import numpy as np
+import warnings
 import labkey
-from gelsurvival import gel_utils  # import the lab_to_df function.
-from gel_utils import lab_to_df
-
-
-## is this lookup worth including?
-icd10_lookup =  pd.read_csv(
-	'/Users/christianbouwens/Documents'
-	'/Internal/survival/surv_git/src/gelpack/coding19.tsv',
-	sep='\t',
-	usecols=['coding', 'meaning']
-	).rename({'coding':'code'}, axis=1)
+from gelpack.gel_utils import lab_to_df
 
 
 class Cohort(object):
 
-	import pandas as pd
-	import warnings
-	import labkey  # this one should be loaded when we call gel_utils.py
-	import re  # likewise, we don't use re atm.
-	# from gelpack.gel_utils import lab_to_df
-	# from gel_utils import lab_to_df  this errors out because the package is not formed correctly?
-	
-	
 	def __init__(self, featdict, version, name=None):
-		
 
 		# check if the featdict has correctly been generated.
 		if not any(
@@ -45,13 +28,14 @@ class Cohort(object):
 				'terms'
 				] for key in featdict.keys()
 				):
+			# if there are no features to create a cohort on - 
+			# return an error.
 			raise KeyError(
 				'featdict does not contain any of the following keys:'
 				'icd10, hpo, cancer_terms, terms'
 				)
 
-		# if there are no features to create a cohort on - 
-		# return an error.
+
 		if 'icd10' in featdict.keys():
 			self.icd10s = featdict['icd10']
 		if 'hpo' in featdict.keys():
@@ -97,8 +81,6 @@ class Cohort(object):
 			dr=self.version
 			)
 		self.dterm_table = rare_disease
-		# TODO we could run into issues with duplicate participant ids this way. 
-		# perhaps we should create a function to collect and clean participant_ids.
 		self.pids['dterm'] = rare_disease['participant_id']
 	
 
@@ -194,7 +176,6 @@ class Cohort(object):
 			pd.DataFrame: a dataframe with participant_ids and clean
 			icd-10 codes.
 		"""
-		# TODO: add av_tumour / av_patient to the cancer options.
 
 		if not all(
 			item in [
@@ -284,7 +265,7 @@ class Cohort(object):
 				hes_icd10_clean = clean_icd10(hes_df_con, self.icd10s)
 				collect_icd10_tables.append(hes_icd10_clean)
 			else:
-				self.warnings.warn("ICD-10 codes not found in HES tables.")
+				warnings.warn("ICD-10 codes not found in HES tables.")
 
 		if any(lim in ['all','mort'] for lim in limit):
 			# extract codes from mortality
@@ -318,7 +299,7 @@ class Cohort(object):
 				mort_icd10_clean = clean_icd10(mortality, self.icd10s)
 				collect_icd10_tables.append(mort_icd10_clean)
 			else:
-				self.warnings.warn("ICD-10 codes not found in mortality tables.")
+				warnings.warn("ICD-10 codes not found in mortality tables.")
 
 
 		if any(lim in ['all','mental_health'] for lim in limit):
@@ -473,7 +454,7 @@ class Cohort(object):
 					)
 				collect_icd10_tables.append(mhsds_diag)
 			else:
-				self.warnings.warn("ICD-10 codes not found in mental health tables.")
+				warnings.warn("ICD-10 codes not found in mental health tables.")
 
 		# concatenate relevant tables (depending on limit.)
 		if any(lim in ['all','cancer'] for lim in limit):
@@ -557,7 +538,7 @@ class Cohort(object):
 					)
 				collect_icd10_tables.append(cancer_diag)
 			else:
-				self.warnings.warn("ICD-10 codes not found in cancer tables.")
+				warnings.warn("ICD-10 codes not found in cancer tables.")
 		# print('length of icd10_tables: ', len(collect_icd10_tables))
 		# concat the various icd-10 sources.
 		if len(collect_icd10_tables) > 1:
@@ -764,7 +745,7 @@ class Cohort(object):
 				)
 			self.sex_table[key] = sex
 
-	def quer_ons(self):
+	def mortality(self):
 		"""Extract the death date from labkey tables for a set of participant_id.
 
 		Args:
@@ -810,7 +791,7 @@ class Cohort(object):
 			# if one of the two tables is empty the merge will fail, hence:
 			check_size = [ons1.size > 0, ons2.size > 0]
 			if sum(check_size) == 0:  # no data in tables
-				self.warnings.warn("No participants found in mortality tables.")
+				warnings.warn("No participants found in mortality tables.")
 			elif sum(check_size) == 2: # both tables have data
 				ons = (ons1.merge(
 						ons2, 
@@ -932,13 +913,22 @@ class Cohort(object):
 		self.summary = self.summarize(
 			pid=all_pids,
 			anc=all_ancestry,
-			mort=all_mort,
+			mort=all_mortality,
 			age=all_age,
 			sex=all_sex
 			)
-		
 		# TODO add missingness.
 
+	def load_icd10_data(self):
+		from importlib import resources
+		with resources.path("gelpack",'coding19.tsv') as f:
+			self.icd10_lookup = pd.read_csv(
+				f, 
+				sep='\t',
+				usecols=['coding','meaning'],
+				).rename({'coding':'code'}, axis=1)
+
+# 	).rename({'coding':'code'}, axis=1))
 	def ontology_stats(self):
 		summ_dict = {}
 		for key, pid in self.pids.items():
@@ -1002,13 +992,14 @@ class Cohort(object):
 							.value_counts()
 						)
 					elif key == 'icd10':
+						self.load_icd10_data()
 						# return simple codes
 						un_icd10 = self.icd10_table.drop_duplicates([
 							'participant_id',
 							'code'
 						])
 						full_icd10 = un_icd10.merge(
-							icd10_lookup, 
+							self.icd10_lookup, 
 							on='code',
 							how='left')
 						self.ont_vcount[key+'_full'] = (
@@ -1016,7 +1007,7 @@ class Cohort(object):
 								.meaning
 								.value_counts(dropna=False)
 							)
-						simple_icd10 = un_icd10
+						simple_icd10 = un_icd10.copy()
 						simple_icd10['simple_code'] = (un_icd10['code']
 							.str.extract(r'([A-Z][0-9]{2})')
 							)

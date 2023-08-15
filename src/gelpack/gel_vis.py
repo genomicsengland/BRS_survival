@@ -5,16 +5,8 @@
 #### visualisations
 #### last update: 2023.08.08
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-from matplotlib import colors as mcolors
-
-
 def simple_count_plt(table, x, ax, colour_pal=None, hue=None, mask=False):
-	# table = cohort.concat_cohort(cohort.sex_table)
-	# table = conc_anc
-	# x = 'predicted_ancestry'
-	# hue= 'level_0'
+	import seaborn as sns
 	threshold = 5
 	if hue:
 		table_count = (table
@@ -48,14 +40,13 @@ def simple_count_plt(table, x, ax, colour_pal=None, hue=None, mask=False):
 			fontsize=8)
 
 	ax.set_ylabel(None)
-	# ax.set_xlabel(None)
 	ax.xaxis.set_label_position('top')
 	ax.margins(.1,0.25)
 
 
 def simple_hist_plt(table, x, ax, hue=None, mask=False):
-# table = cohort.concat_cohort(cohort.sex_table)
-#   table = cohort.concat_cohort(cohort.age_table)
+	import seaborn as sns
+
 	threshold = 5
 	sns.set_theme(style='whitegrid')
 	sns.histplot(
@@ -68,7 +59,7 @@ def simple_hist_plt(table, x, ax, hue=None, mask=False):
 		)
 	for c in ax.containers:
 		if mask:
-			labels = [v if v > threshold else "<5" for v in c.datavalues]
+			labels = [v if v > threshold  else "<5" for v in c.datavalues]
 		else:
 			labels =  [v for v in c.datavalues]
 		ax.bar_label(
@@ -78,7 +69,6 @@ def simple_hist_plt(table, x, ax, hue=None, mask=False):
 			fontsize=8)
 
 	ax.set_ylabel(None)
-	# ax.set_xlabel(None)
 	ax.xaxis.set_label_position('top') 
 	ax.margins(0,0.25)
 
@@ -100,6 +90,10 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 		ploting (bool,optional): prints the plot using plt.show if true, returns
 			the fig variable if False. 
 	"""
+	import seaborn as sns
+	import matplotlib.pyplot as plt
+	import pandas as pd
+
 	if not coldict:
 		coldict = {
 		'all_gel':{
