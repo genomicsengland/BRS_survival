@@ -1,11 +1,48 @@
-# Survival Python
+# Gelpack
+This python package contains functions to interact with the Genomics England 100,000 Genomes Project data. 
+
+## Cohorts
+The Cohort class takes in a dictionary with icd-10, hpo or disease terms and gathers a list of participants and their age, mortality, ancestry, and sex.
 
 ## GEL survival analysis
-This python package contains functions to extract diagnosis dates, date of death and last follow ups with the clinic to calculate and plot a Kaplan-Meier survival analysis (stratifying on Domain variants).
+The Survdat class contains functions to extract diagnosis dates, date of death and last follow ups with the clinic to calculate and plot a Kaplan-Meier survival analysis (stratifying on Domain variants).
 
 ## Data sources and approach:
 ### This package requires a set up .netrc to link with LabKey.
 
+### Cohort building:
+input a dictionary with keys of: icd-10 codes, hpo terms, cancer terms, disease terms.
+
+Sources:
+* ICD-10:
+- hes-apc
+- hes-ae
+- hes-op
+- mortality
+- mhsds_medical_history_previous_diagnosis
+- mhsds_provisional_diagnosis
+- mhsds_primary_diagnosis
+- mhsds_secondary_diagnosis
+- mhsds_care_activity
+- mhsds_indirect_activity
+- cancer_invest_sample_pathology
+- cancer_participant_tumour
+- cancer_registry
+- rtds
+- sact
+- av_tumour
+
+* HPO terms
+- rare_diseases_participant_phenotype
+
+* cancer terms
+- cancer_participant_disease
+
+* disease terms
+- rare_diseases_participant_disease
+
+
+### Survival
 Cancer participants:
 * PRIMARY cancers in cancer_analysis
 * keeping unique participant_ids + disease_types.
