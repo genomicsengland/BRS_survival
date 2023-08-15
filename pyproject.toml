@@ -1,6 +1,20 @@
 [build-system]
-requires = ["setuptools>=61.0", "numpy>=1.21.2", "pandas>=1.3.4", "labkey>=1.2.0", "lifelines>=0.27.4"]
+requires = [
+	"setuptools>=65.5.0", 
+	"numpy>=1.21.2", 
+	"pandas>=1.3.4", 
+	"labkey>=1.2.0", 
+	"lifelines>=0.27.4", 
+	"matplotlib>=3.5.3",
+	"seaborn>=0.12.1"
+	]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gelpack = ["*.tsv"]
 
 [project]
 name = "gelpack"
@@ -8,9 +22,9 @@ version = "1.0.1"
 authors = [
 	{name="Christian Bouwens", email="christian.bouwens@genomicsengland.co.uk"},
 ]
-description = "This package assists in creating cancer- or rare disease-cohorts. As well as extracting and calculating survival metrics from the Genomics England 100,000 Genomes Project data."
+description = "this package assists in extracting cohorts and calculating survival metrics from the Genomics England 100,000 Genomes Project data."
 readme ="README.md"
-requires-python =">=3.7"
+requires-python =">=3.9.15"
 classifiers = [
 	"Programming Language :: Python :: 3",
 	"License :: OSI Approved ::  MIT License",

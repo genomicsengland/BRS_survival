@@ -1,5 +1,11 @@
-import pandas
+import pandas as pd
+import gelpack
+from gelpack import cohort
 
+gel.Cohort()
+
+from gelpack.gel_utils import lab_to_df
+from gelpack.cohort import Cohort
 
 ## create a cohort 
 cohort1 = {
@@ -8,7 +14,6 @@ cohort1 = {
 		],
 	'icd10':[
 		'Q780',
-		'M81'
 		],
 		}
 	
@@ -65,6 +70,7 @@ cohort.icd10_overlap_matrix
 cohort.concat_all()
 cohort.all_age
 
+
 ############# testing cancer cohort creation ################
 version = "main-programme/main-programme_v17_2023-03-30"
 
@@ -116,6 +122,8 @@ cohort2.concat_all()
 import gel_vis
 fig2 = vis_cohorts(cohort, show=False)
 fig2.show()
+
+
 # get all participant ids associated with 
 # icd-10 -> we don't know if we have a sample and/or if this sample is for this specific icd-10 code
 # cancer_term -> cancer_participant_disease: not that accurate, and we don't kow if we a participant has a sample.
