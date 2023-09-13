@@ -170,6 +170,11 @@ class Cohort(object):
 					for keys,table in self.omics_sample_data.items():
 						table.drop(table[table['participant_id'].isin(ids)].index,
 						inplace=True)
+				if name == 'gmc_registration':
+					for keys,table in self.gmc_registration.items():
+						table.drop(table[table['participant_id'].isin(ids)].index,
+						inplace=True)
+					
 						# also recalculate the sample counts/location
 						
 
@@ -1011,6 +1016,7 @@ class Cohort(object):
 			self.omics_sample_counts[key] = counts
 			self.omics_sample_location[key] = location
 			self.omics_sample_data[key] = sample_meta
+		
 		# should this be a seperate function/call? its not only sample related.
 		# retrieve GMC registration site per participant
 		for key, pid in self.pids.items():
@@ -1031,7 +1037,7 @@ class Cohort(object):
 			self.gmc_registration[key] = registration_loc
 		self.feature_tables['gmc_registration'] = self.gmc_registration
 		self.feature_tables['omics_sample_data'] = self.omics_sample_data
-			# now split up the data into sample types.
+
 		
 			
 	################ summarysing the self ##################
