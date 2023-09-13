@@ -3,9 +3,9 @@
 #### Miruna Carmen Barbu
 #### Chris Odhams
 #### BRSC team
-#### generate a GEL cohort from HPO terms and ICD-10 codes
+#### generate a GEL self from HPO terms and ICD-10 codes
 #### can be applied for cancer as well as rare disease cases.
-#### last update: 2023.08.08
+#### last update: 2023.09.12
 
 
 import pandas as pd
@@ -17,41 +17,174 @@ from gelpack.gel_utils import lab_to_df
 
 class Cohort(object):
 
-	def __init__(self, featdict, version, name=None):
-
+	def __init__(self, featdict, version, name=None, participants=None):
 		# check if the featdict has correctly been generated.
-		if not any(
-			key in [
-				'icd10', 
-				'hpo', 
-				'cancer_terms', 
-				'terms'
-				] for key in featdict.keys()
-				):
-			# if there are no features to create a cohort on - 
-			# return an error.
-			raise KeyError(
-				'featdict does not contain any of the following keys:'
-				'icd10, hpo, cancer_terms, terms'
-				)
+		if (
+			not featdict
+			and not participants
+			):
+			raise ValueError(
+				'either featdict or participants must be given to create cohort.'
+			)
+		if featdict:
+			if not any(
+				key in [
+					'icd10', 
+					'hpo', 
+					'cancer_terms', 
+					'terms'
+					] for key in featdict.keys()
+					):
+				# if there are no features to create a self on - 
+				# return an error.
+				raise KeyError(
+					'featdict does not contain any of the following keys:'
+					'icd10, hpo, cancer_terms, terms'
+					)
 
-
-		if 'icd10' in featdict.keys():
-			self.icd10s = featdict['icd10']
-		if 'hpo' in featdict.keys():
-			self.hpo = featdict['hpo']
-		if 'terms' in featdict.keys():
-			self.dterms = featdict['terms']
-		if 'cancer_terms' in featdict.keys():
-			self.cterms = featdict['cancer_terms']
-		# we could add the cancer disease types here.
-		# can we build a cohort based on morphology/histology codes?
-		# or let people do that themselves and just import the data from pids?
+			if 'icd10' in featdict.keys():
+				self.icd10s = featdict['icd10']
+			if 'hpo' in featdict.keys():
+				self.hpo = featdict['hpo']
+			if 'terms' in featdict.keys():
+				self.dterms = featdict['terms']
+			if 'cancer_terms' in featdict.keys():
+				self.cterms = featdict['cancer_terms']
+			# we could add the cancer disease types here.
+			# can we build a self based on morphology/histology codes?
+			# or let people do that themselves and just import the data from pids?
 		self.version = version
 		self.pids = {}
+		self.feature_tables = {}
 		self.name = name
 
-	################# functions building the cohort ######################
+		if participants:
+			self.custom_pids(
+				pids_lst_file=participants,
+				action='include'
+				)
+		
+
+	################# functions building the self ######################
+	def custom_pids(self, pids_lst_file, action='include'):
+		"""
+		Take a list of participant ids or a csv/tsv file with a 
+		'participant_id' column and return the participant ids in a format
+		we can include in self.pids. we are keeping the return ambiguous as
+		we may use this function to exclude pids from the cohort as well.
+
+		Args:
+			pids_lst_file (str or list): a filepath to a tsv/file with a header
+			'participant_id' and a column of participant ids. Or: a list of 
+			participant ids.
+			aciton (str): 'include' or 'exclude': shoudl the participants be 
+			included in self.pids or should they be excluded from self.pids and
+			the present features (sex, mortality, ancestry, age)?
+
+		Raises:
+			ValueError: if the csv/tsv has no header.
+			ValueError: if the delimiters of the tsv/csv file are not ',' or
+			'\t'.
+			ValueError: if the csv/tsv has no header participant_id.
+
+		Returns:
+			_type_: _description_
+		"""
+		# allow custom participants ids to be added to the cohort.
+		if isinstance(pids_lst_file, list) and not isinstance(pids_lst_file, str):
+			ids = pd.Series(pids_lst_file, name='participant_id')
+		elif pids_lst_file.endswith(('.tsv', ".csv")):
+			import csv
+			# check if the file has one column and a header:
+			with open(pids_lst_file, 'r') as f:
+				try:
+					csv.Sniffer().has_header(f.read(1024))
+				except csv.Error:
+					raise ValueError(
+						'The participants tsv/csv file has no header.'
+					)
+				dialect = csv.Sniffer().sniff(f.read(1024), [",","\t"]) 
+				if dialect.delimiter not in [',','\t']:
+					raise ValueError(
+						'The delimiters of the participants tsv/csv file are not supported'
+					)
+				f.seek(0)
+				reader = csv.DictReader(f, dialect=dialect)
+				lines = [line for line in reader]
+				if 'participant_id' not in lines[0].keys():
+					raise ValueError(
+						'The participants tsv/csv file has no header: participant_id'
+					)
+
+			part_table = pd.read_csv(pids_lst_file, sep=dialect.delimiter)
+			ids = part_table['participant_id']
+		else:
+			warnings.warn('Custom participant_ids not in list or tsv/csv.')
+
+		if action == 'include':
+			self.pids['custom'] = ids
+		elif action == 'exclude':
+			for keys, table in self.pids.items():
+				self.pids[keys] = pd.DataFrame(
+					{'participant_id' : [x for x in table if x not in ids]}
+					)['participant_id']
+				if keys == 'dterm':
+					self.dterm_table = self.dterm_table.loc[
+						~self.dterm_table['participant_id'].isin(ids)
+					]
+				elif keys == 'cterm':
+					self.cterm_table = self.cterm_table.loc[
+						~self.cterm_table['participant_id'].isin(ids)
+					]
+				elif keys == 'icd10':
+					self.icd10_table = self.icd10_table.loc[
+						~self.icd10_table['participant_id'].isin(ids)
+					]
+				elif keys == 'hpo':
+					self.hpo_table = self.hpo_table.loc[
+						~self.hpo_table['participant_id'].isin(ids)
+					]
+			
+			# remove the data from the feature teables too if they exist.
+			# just using if self.age_table is not None: does not work, 
+			# hence the existance of feature_tables , we can track what
+			# features are in the class, and easily iterate over them.
+			for name, feature in self.feature_tables.items():
+				if name == 'age':
+					for keys, table in self.age_table.items():
+						table.drop(table[table['participant_id'].isin(ids)].index,
+						inplace=True)
+				if name == 'mortality':
+					for keys,table in self.mortality_table.items():
+						table.drop(table[table['participant_id'].isin(ids)].index,
+						inplace=True)
+				if name == 'sex':
+					for keys,table in self.sex_table.items():
+						table.drop(table[table['participant_id'].isin(ids)].index,
+						inplace=True)
+				if name == 'ancestry':
+					for keys,table in self.ancestry_table.items():
+						table.drop(table[table['participant_id'].isin(ids)].index,
+						inplace=True)
+				if name == 'omics_sample_data':
+					for keys,table in self.omics_sample_data.items():
+						table.drop(table[table['participant_id'].isin(ids)].index,
+						inplace=True)
+						# also recalculate the sample counts/location
+						
+
+			# remove the participants from the concatenated table:
+			# except -> when all_data wasn't created yet.
+			try:
+				self.all_data = self.all_data.loc[
+					~self.all_data['participant_id'].isin(ids)
+				]
+			except AttributeError:
+				pass
+			except NameError:
+				pass
+
+
 	def get_term_pids(self):
 		"""get participant_ids associated with the given disease_terms from
 		various labkey tables: 
@@ -514,11 +647,9 @@ class Cohort(object):
 				)
 				]
 
-
 			cancer_sql_repl  = [path_sql
 				.replace('x', i[1])
 				.replace('z', i[0]) for i in c_table_str]
-
 
 			cancer_code_list= [
 				lab_to_df(
@@ -551,11 +682,11 @@ class Cohort(object):
 			self.warnings.warn("No participants found with these ICD-10 codes.")
 
 
-	################ adding features to the cohort ##################
+	################ adding features to the self ##################
 	# we grab the unique participants here.
 	def age(self):
 		"""Get the age at consent and current age for each participant in the 
-		cohort. This function does go over each source (cancer, icd10, hpo...)
+		self. This function does go over each source (cancer, icd10, hpo...)
 		individually, which may lead to a few duplicate entries being calculated.
 		But allows for comparison of the source cohorts downstream.
 
@@ -636,11 +767,12 @@ class Cohort(object):
 				), False, True)
 
 			self.age_table[key] = age_df
+			self.feature_tables['age'] = self.age_table
 
 
 	def ancestry(self):
 		"""Get the age at consent and current age for each participant in the 
-		cohort. like age(), this function goes over each source (cancer, icd10, hpo...)
+		self. like age(), this function goes over each source (cancer, icd10, hpo...)
 		individually, which may lead to a few duplicate entries being calculated.
 		But allows for comparison of the source cohorts downstream.
 
@@ -719,6 +851,7 @@ class Cohort(object):
 						]
 					)
 			self.ancestry_table[key] = ancestry
+			self.feature_tables['ancestry']=self.ancestry_table
 
 
 	def sex(self):
@@ -744,6 +877,8 @@ class Cohort(object):
 				dr=self.version
 				)
 			self.sex_table[key] = sex
+			self.feature_tables['sex'] = self.sex_table
+
 
 	def mortality(self):
 		"""Extract the death date from labkey tables for a set of participant_id.
@@ -768,8 +903,7 @@ class Cohort(object):
 					death_details
 				WHERE 
 					participant_id IN {*pid,}
-				'''
-			)
+				''')
 			ons1 = lab_to_df(
 				sql_query=query2,
 				dr=self.version)
@@ -781,7 +915,7 @@ class Cohort(object):
 					mortality
 				WHERE 
 					participant_id IN {*pid,}
-			''')
+				''')
 			ons2 = lab_to_df(
 				sql_query=query3,
 				dr=self.version)
@@ -808,16 +942,99 @@ class Cohort(object):
 					tmp_mort['date_of_death'].isna(), 'Alive', 'Deceased')
 
 				self.mortality_table[key] = tmp_mort
+				self.feature_tables['mortality'] = self.mortality_table
 			elif sum(check_size) == 1:  # only one of the two lists has got data.
 				res = [[ons1, ons2][i] for i, val in enumerate(check_size) if val]
 				tmp_mort = pd.merge(pid, res[0], on='participant_id', how='left')
 				tmp_mort['status'] = np.where(
 					tmp_mort['date_of_death'].isna(), 'Alive', 'Deceased')
 				self.mortality_table[key] = tmp_mort  # unlisting the datarame.
+				self.feature_tables['mortality'] = self.mortality_table
 
-				
 
-	################ summarysing the cohort ##################
+	def sample_metadata(self):
+		"""Extract sample metadata from labkey. Specifically looking at omics
+		sample availability and location. Please keep in mind the sample counts
+		are subject to change.
+		
+		Returns: 
+			omics_sample_data (dictionary): The keys of which correspond to the
+			different cohorts in self.pids. This table contains info on each sample
+			collected.
+			omics_sample_counts: the number of samples per sample_type 
+			(RNA)
+			) 
+		"""
+		self.omics_sample_data = {}
+		self.omics_sample_counts = {}
+		self.omics_sample_location = {}
+		self.gmc_registration = {}
+		for key, pid in self.pids.items():
+			meta_query = (f'''
+				SELECT
+					samp.participant_id,
+					samp.laboratory_sample_id,
+					samp.laboratory_sample_gmc_ods_code,
+					samp.laboratory_sample_gmc_trust,
+					samp.sample_type,
+					samp.sample_preparation_method,
+					samp.tumour_germline_omics,
+					samp.sample_received_at_biorepository,
+					omics.aliquots
+				FROM
+					laboratory_sample samp
+				LEFT JOIN 
+					laboratory_sample_omics_availability omics
+				ON 
+					samp.laboratory_sample_id = omics.laboratory_sample_id
+				WHERE
+					samp.participant_id IN {*pid,}
+				''')
+			sample_meta = lab_to_df(
+				sql_query=meta_query,
+				dr=self.version
+				)
+			# create a histogram of the number of aliquots per sample type
+			counts = sample_meta.groupby(
+				['sample_type', 'aliquots']
+				).size()
+
+			location = sample_meta.groupby(
+				[
+					'sample_type',
+					'laboratory_sample_gmc_trust',
+					'laboratory_sample_gmc_ods_code'
+					]
+				).size()
+			location.reset_index(drop=False, name='count')
+			
+			self.omics_sample_counts[key] = counts
+			self.omics_sample_location[key] = location
+			self.omics_sample_data[key] = sample_meta
+		# should this be a seperate function/call? its not only sample related.
+		# retrieve GMC registration site per participant
+		for key, pid in self.pids.items():
+			gmc_query = (f'''
+				SELECT
+					participant_id, 
+					registered_at_gmc_trust,
+					registered_at_gmc_ods_code
+				FROM
+					participant
+				WHERE
+					participant_id IN {*pid,} '''
+					)
+			registration_loc = lab_to_df(
+				sql_query=gmc_query,
+				dr=self.version
+				)
+			self.gmc_registration[key] = registration_loc
+		self.feature_tables['gmc_registration'] = self.gmc_registration
+		self.feature_tables['omics_sample_data'] = self.omics_sample_data
+			# now split up the data into sample types.
+		
+			
+	################ summarysing the self ##################
 	def concat_cohort(cls, dc):
 		"""concatenate the dataframes in a dictionary, note; the dicitonarys
 		should have the same structure / columns. 
@@ -829,15 +1046,18 @@ class Cohort(object):
 			pd.DataFrame: A concatenated pandas dataframe with unique values in
 			the dictionary.
 		"""
-		concatdc = (pd.concat(dc.values())
-			.reset_index(drop=True)
-			.drop_duplicates()
-			)
+		if len(dc.keys()) > 1:
+			concatdc = (pd.concat(dc.values())
+				.reset_index(drop=True)
+				.drop_duplicates()
+				)
+		else:
+			concatdc = next(iter(dc.values()))
 
 		return concatdc
 	
-	def summarize(cls, pid, anc, mort, age, sex):
-		"""gather up cohort data and return summary stats. including:
+	def summarize(cls, pid=None, anc=None, mort=None, age=None, sex=None):
+		"""gather up self data and return summary stats. including:
 		- number of unique participants
 		- mean age at consent
 		- standard deviation of mean age at consent
@@ -859,31 +1079,80 @@ class Cohort(object):
 		Returns:
 			pd.DataFrame: single row DataFrame with summary stats.
 		"""
-		ancestry_distribution = (anc.predicted_ancestry
-			.value_counts(normalize=True)
-			.reset_index(name='0', drop=False)
-			.T)
-		ancestry_distribution.columns = ancestry_distribution.iloc[0]
-		ancestry_distribution.drop(ancestry_distribution.index[0], inplace=True)
+		# not all features have to be calculated/present.
+		# only include those that are.
+		# instead of building a dataframe in one go we'll concat each
+		# column that we actually have.
+		summary_series = []  # add each feature we want to include as named series.
+		if pid is not None:
+			summary_series.append(
+				pd.Series(len(pid), name='n_unique_participants')
+			)
+		if age is not None:
+			summary_series.append(
+				pd.Series(
+					np.mean(age['age_at_consent']), 
+					name='mean_consent_age'
+					)
+					)
+			summary_series.append(
+				pd.Series(
+					np.std(age['age_at_consent']), 
+					name='std_consent_age'
+					)
+					)
+			summary_series.append(
+				pd.Series(
+					np.mean(age['current_age']), 
+					name='mean_current_age'
+					)
+					)
+			summary_series.append(
+				pd.Series(
+					np.std(age['current_age']), 
+					name='std_current_age'
+					)
+					)
+		if sex is not None:
+			summary_series.append(
+				pd.Series(
+					sex['sex'].value_counts(normalize=True)[0], 
+					name='fraction_female'
+					)
+					)
+		if mort is not None:
+			summary_series.append(
+				pd.Series(
+					mort['status'].value_counts(normalize=True)[1], 
+					name='fraction_deceased'
+					)
+					)
 
-		# changed the structure of the mortality table so no longer needed,
-		# percent_mort = len(
-		# 	[x for x in list(pid) if x in list(mort['participant_id'])]
-		# 	) / len(pid)
+		summary = pd.concat(summary_series, axis=1)
 
-		summary = pd.DataFrame(
-			{
-			'n_unique_participants':len(pid),
-			'mean_consent_age':np.mean(age['age_at_consent']),
-			'std_consent_age':np.std(age['age_at_consent']),
-			'mean_current_age':np.mean(age['current_age']),
-			'std_current_age':np.std(age['current_age']),
-			'fraction_female':
-				sex['sex'].value_counts(normalize=True)[0],
-				  # alphabetically ordered.
-			'fraction_deceased': 
-				mort['status'].value_counts(normalize=True)[1]
-			}, index=[0])
+		# ancestry_distribution is already 'wide' - various columns.	
+		if anc is not None:
+			ancestry_distribution = (anc.predicted_ancestry
+				.value_counts(normalize=True)
+				.reset_index(name='0', drop=False)
+				.T)
+			ancestry_distribution.columns = ancestry_distribution.iloc[0]
+			ancestry_distribution.drop(ancestry_distribution.index[0], inplace=True)
+			
+
+		# summary = pd.DataFrame(
+		# 	{
+		# 	'n_unique_participants':len(pid),
+		# 	'mean_consent_age':np.mean(age['age_at_consent']),
+		# 	'std_consent_age':np.std(age['age_at_consent']),
+		# 	'mean_current_age':np.mean(age['current_age']),
+		# 	'std_current_age':np.std(age['current_age']),
+		# 	'fraction_female':
+		# 		sex['sex'].value_counts(normalize=True)[0],
+		# 		  # alphabetically ordered.
+		# 	'fraction_deceased': 
+		# 		mort['status'].value_counts(normalize=True)[1]
+		# 	}, index=[0])
 		
 		summary_anc = pd.concat(
 			[
@@ -894,21 +1163,174 @@ class Cohort(object):
 
 		return summary_anc
 	
-	def concat_all(self):
-		self.all_pids = self.concat_cohort(self.pids)
-		self.all_age = self.concat_cohort(self.age_table)
-		self.all_ancestry = self.concat_cohort(self.ancestry_table)
-		self.all_sex = self.concat_cohort(self.sex_table)
-		self.all_mort = self.concat_cohort(self.mortality_table)
 
+	def concat_all(self):
+		"""concatenates all the features and sources in the cohort to a long
+		type table, matching each patient/diagnosis combination with its features
+		this is usefull for filtering, especially when you want to exclude
+		participants of a certain feature (e.g. age) and diagnosis - 
+		but don't want to blanket remove based on features. (e.g. 
+		filter participants age 30 and under for diagnosis A, but include all ages
+		for diagnosis B: a participant who is 25 yo and was diagnosed for both
+		A and B will be included in the cohort)
+
+		Raises:
+			RuntimeError: When no valid cohort is present
+			RuntimeError: when no valid features are present
+		"""
+		# keeping all the keys and features in seperate tables does add a lot 
+		# of overhead when wanting to include new features.
+		diag_keys = [
+			'icd10',
+			'dterm',
+			'cterm',
+			'hpo',
+			'custom'
+		]
+		# we are concatenating all the potential diagnosis, hpo, icd10, disease terms
+		# as the researcher may want to apply filtering to specific parts of the self.
+		# e.g. filter out participants under age 30 with ICD-10 code A. But keep 
+		# all participants (irrelevant of age) for a particular hpo term. If a participant
+		# is included for the icd-10 code AND the hpo term we don't want to completely
+		# remove the participant_id from self.pids.
+		if all([not k in self.pids.keys() for k in diag_keys]):
+			raise RuntimeError('No valid cohorts to concatenate found')
+		else:
+			# check which keys have been included in the cohort.
+			conc_tables = []
+			for key in diag_keys:
+				if key in self.pids.keys():
+					if key == 'dterm':
+						conc_tables.append(
+							self.dterm_table.rename(
+								{'normalised_specific_disease':'diag'}, 
+								axis=1)
+								)
+					if key == 'icd10':
+						conc_tables.append(
+							self.icd10_table.rename(
+								{'code':'diag'}, 
+								axis=1)
+								)	
+					if key == 'cterm':
+						conc_tables.append(
+							self.cterm_table.rename(
+								{'cancer_disease_type':'diag'},
+								axis=1)
+								)
+					if key == 'hpo':
+						conc_tables.append(
+							self.hpo_table.rename(
+								{'normalised_hpo_id':'diag'},
+								axis=1
+							)
+						)
+					if key == 'custom':
+						tmpframe = pd.DataFrame({
+							'participant_id':self.pids['custom']
+							})
+						tmpframe['diag'] = 'custom'
+						conc_tables.append(tmpframe)
+
+			ntable = sum([k in self.pids.keys() for k in diag_keys])
+			if ntable > 1:
+				diag_table = pd.concat(conc_tables)
+			else:
+				diag_table = conc_tables[0]
+
+
+		# feature_tables is a method for tracking what
+		# features we've calculated in the cohort
+		# feature_tables = {
+		# 	'age':self.age_table,
+		# 	'ancestry':self.ancestry_table,
+		# 	'sex':self.sex_table,
+		# 	'mortality':self.mortality_table
+		# }
+		# bit of weird double negative here,
+		# if none of the feature tables exist in the class
+		# we want to send an error, otherswise continue.
+		# alternatively we could:
+		# if any ([k for k in feature tables:]) 
+		# and then call the error at the end of the for loop.
+		if all([not feature for name, feature in self.feature_tables.items()]):
+			raise RuntimeError('No valid cohorts to concatenate found')
+		else:
+			self.all_pids = self.concat_cohort(self.pids)
+			tmp_merge = [self.all_pids]
+			for name, feature in self.feature_tables.items():
+				if feature:
+					if name == 'age':
+						self.all_age = self.concat_cohort(feature)
+						tmp_merge.append(self.all_age)
+					elif name == 'ancestry':
+						self.all_ancestry = self.concat_cohort(feature)
+						tmp_merge.append(self.all_ancestry)
+					elif name == 'sex':
+						self.all_sex = self.concat_cohort(feature)
+						tmp_merge.append(self.all_sex)
+					elif name == 'mortality':
+						self.all_mortality = self.concat_cohort(feature)
+						tmp_merge.append(self.all_mortality)
+					elif name == 'omics_sample_data':
+						self.all_omics_metadata = self.concat_cohort(feature)
+						# since the key here are the samples and not the 
+						# participants we shouldn't merge them to all_data.
+						# where the key is diag+participant_id
+					elif name == 'gmc_registration':
+						self.all_gmc_registration = self.concat_cohort(feature)
+
+
+		# determine which of the features are available in the class
+		# then perform stepwise merges for those
+		from functools import reduce
+		df_merged = reduce(lambda left,right: 
+			pd.merge(
+				left, right,
+				on=['participant_id'],
+				how='left'), tmp_merge)
+
+		self.all_data = pd.merge(
+			diag_table,
+			df_merged,
+			on='participant_id',
+			how='left'
+			)
+
+		
 	def summary_stats(self):
-	
-		# collapse data.
+		"""calculate feature stats of the cohort, this should ideally be all
+		features (age, sex, ancestry, mortality). depends on the summarize() 
+		function. First collapse all the participant ids in the featuers (as they
+		are generated per diag/ontology, e.g. self.age has got a table for
+		icd10, hpo part of the cohort.)
+
+		Returns:
+			self.summary: a summary table of the entire cohort. not per ontology.
+		"""
+
+		# setting tables to none to allow summary() to only use those which we
+		# have calculated.
+		all_ancestry = all_mortality = all_age = all_sex = None
+		# collapse all the features we have identified
 		all_pids = self.concat_cohort(self.pids)
-		all_age = self.concat_cohort(self.age_table)
-		all_ancestry = self.concat_cohort(self.ancestry_table)
-		all_sex = self.concat_cohort(self.sex_table)
-		all_mortality = self.concat_cohort(self.mortality_table)
+		for name, feature in self.feature_tables.items():
+			if name == 'age':
+				all_age = self.concat_cohort(feature)
+			elif name == 'ancestry':
+				all_ancestry = self.concat_cohort(feature)
+			elif name == 'sex':
+				all_sex = self.concat_cohort(feature)
+			elif name == 'mortality':
+				all_mortality = self.concat_cohort(feature)
+			elif name == 'omics_sample_data':
+				all_omics = self.concat_cohort(feature)
+			elif name == 'gmc_registration':
+				all_reg = self.concat_cohort(feature)
+
+			else:
+				return KeyError('Feature in feature table not recognised.')
+
 
 		self.summary = self.summarize(
 			pid=all_pids,
@@ -917,9 +1339,13 @@ class Cohort(object):
 			age=all_age,
 			sex=all_sex
 			)
-		# TODO add missingness.
+
 
 	def load_icd10_data(self):
+		"""gelpack contains a translation file for icd-10 codes, this function
+		loads in the relevant file - used for generating summary statitics per
+		icd-10 code.
+		"""
 		from importlib import resources
 		with resources.path("gelpack",'coding19.tsv') as f:
 			self.icd10_lookup = pd.read_csv(
@@ -928,8 +1354,18 @@ class Cohort(object):
 				usecols=['coding','meaning'],
 				).rename({'coding':'code'}, axis=1)
 
-# 	).rename({'coding':'code'}, axis=1))
+
 	def ontology_stats(self):
+		"""calculate cohort summary per ontology/source (hpo, icd10, cterm,
+		dterm, custom).
+
+		Raises:
+			RuntimeError: Returns an error when there are no ontologies to
+			summarize.
+
+		Returns:
+			self.ont_vcount and self.icd10_overlap_matrix
+		"""
 		summ_dict = {}
 		for key, pid in self.pids.items():
 			summ_dict[key] = self.summarize(
@@ -948,15 +1384,33 @@ class Cohort(object):
 			)
 
 		# participant counts per searched term / ontology
-		# count_dict = {} is already part of summary_ont now (n_unique_participants).
+		# count_dict = {} is already part of summary_ont now 
+		# (n_unique_participants).
 		# vcount should summarize the counts for each resource.		
 		self.ont_vcount = {}
-		if all([k in self.pids.keys() for k in ['dterm','hpo','cterm','icd10']]):
+		if all([not k in self.pids.keys() for k in [
+			'dterm',
+			'hpo',
+			'cterm',
+			'icd10',
+			'custom']]):   # TODO add custom vcounts.
 			raise RuntimeError('No valid cohorts to summarize found')
 		else:
-			# check which keys have been included in the cohort.
-			for key in ['dterm', 'hpo', 'cterm' , 'icd10']:
+			# check which keys have been included in the self.
+			for key in ['dterm', 'hpo', 'cterm' , 'icd10', 'custom']:
 				if key in self.pids.keys():
+					if key == 'custom':
+						tmpframe = pd.DataFrame({
+							'participant_id':self.pids['custom']
+							})
+						tmpframe['diag'] = 'custom'
+						self.ont_vcount[key] = (self.tmpframe 
+							.drop_duplicates([
+								'participant_id',
+								'diag'])
+							.diag
+							.value_counts()
+						)  
 					if key == 'dterm':
 						self.ont_vcount[key] = (self.dterm_table 
 							.drop_duplicates([
@@ -977,8 +1431,9 @@ class Cohort(object):
 							+ hpo_uniq['normalised_hpo_term']+')'
 							)
 						self.ont_vcount[key] = hpo_uniq.term.value_counts()  # return to self.
+					
 					# related to cancer -> is this how we would go about creating a
-					# cancer cohort?
+					# cancer self?
 					# TODO: add a check for icd-10 codes (confirm diagnosis)
 					# TODO: add a search for study_abbreviation.
 					# TODO: add a ICD-10 -> sample / option.
@@ -1028,13 +1483,45 @@ class Cohort(object):
 							.groupby(['participant_id','simple_code'])
 							.size()
 							).unstack()
-					
+	############### filtering the cohort ####################
 
 
-## utilities for figures.
-## apply those utilities to gather figures.
-# if we set the table strings in a dictionary per version - which is loaded 
-# upon setting the version -> easy to do version control.
+	def feature_filter(self, query_string, action='exclude'):
+		try:
+			filter_cohort = self.all_data.query(query_string, engine='python')
+		except AttributeError:
+			self.concat_all()
+			filter_cohort = self.all_data.query(query_string, engine='python')
+		
+		# note that we implicitely do not remove participants when they may
+		# remain in the cohort under different diagnosis codes.
+		# TODO: this may cause confusion and needs to be reviewed.
+		if action =='exclude':
+			# if we drop all these we are inadvertantly going to drop participants who should be included.
+			# we could drop the from a copy of the table and check for each participant id
+			# if they remain in another query.
+			main = pd.concat([self.all_data.copy(), filter_cohort])
+			main.drop_duplicates(keep=False)
+			# now check for filter_cohort which ones are not in main.participant_ids
+			filter_pids = [x for x in filter_cohort['participant_id'] if x not in main.participant_id]
+			
+		elif action =='include':
+			# not this 'include' is different from the costuom_pids() action == include
+			# custom_pids include just adds the participant_ids to self.pids['custom']
+			# if we want to filter our data to only `include` the selected participants
+			# we have to exclude the inverse.
+			filter_pids = [
+				x for x in self.all_data['participant_id'] 
+					if x not in filter_cohort['participant_id']
+					]
+		else:
+			raise NameError('no valid argument for `action` included.')
 
-# if we set the table strings in a dictionary per version - which is loaded 
+		# subsequently remove the participant ids from the cohort with
+		self.custom_pids(
+			pids_lst_file=filter_pids,
+			action='exclude'
+			)
+
+# if we set the sql table strings in a dictionary per version - which is loaded 
 # upon setting the version -> easy to do version control.

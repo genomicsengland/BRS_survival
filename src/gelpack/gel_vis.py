@@ -1,11 +1,15 @@
 #### Christian J. Bouwens
-#### Miruna Carmen Barbu
-#### Chris Odhams
 #### BRSC team
 #### visualisations
-#### last update: 2023.08.08
+#### last update: 2023.09.12
 
-def simple_count_plt(table, x, ax, colour_pal=None, hue=None, mask=False):
+def simple_count_plt(
+		table, 
+		x, 
+		ax, 
+		colour_pal=None, 
+		hue=None,
+		mask=False):
 	import seaborn as sns
 	threshold = 5
 	if hue:
@@ -26,11 +30,16 @@ def simple_count_plt(table, x, ax, colour_pal=None, hue=None, mask=False):
 		ax=ax,
 		hue=hue
 		)
-
+	# removing bars that need masking.
+	for bar in ax.patches:
+		if mask:
+			if bar.get_height() < threshold:
+				bar.set_height(h=0)
 	# adding the numeric values on top of the bars.
 	for c in ax.containers:
 		if mask:
-			labels = [v if v > threshold else "<5" for v in c.datavalues]
+			labels = [
+				v if v >= threshold or v == 0 else "<5" for v in c.datavalues]
 		else:
 			labels =  [v for v in c.datavalues]
 		ax.bar_label(
@@ -44,7 +53,15 @@ def simple_count_plt(table, x, ax, colour_pal=None, hue=None, mask=False):
 	ax.margins(.1,0.25)
 
 
-def simple_hist_plt(table, x, ax, hue=None, mask=False):
+def simple_hist_plt(
+	table, 
+	x, 
+	ax, 
+	binwidth=5,  
+	hue=None, 
+	mask=False, 
+	discrete=False):
+
 	import seaborn as sns
 
 	threshold = 5
@@ -52,14 +69,23 @@ def simple_hist_plt(table, x, ax, hue=None, mask=False):
 	sns.histplot(
 		data=table,
 		x=x,
-		binwidth=5,
+		binwidth=binwidth,
 		element="bars",
 		ax=ax,
-		hue=hue
+		hue=hue,
+		discrete=discrete
 		)
+
+	# mask bars under 5 counts.
+	for bar in ax.patches:
+		if mask:
+			if bar.get_height() < threshold:
+				bar.set_height(h=0)
+	# mask labels under 5 counts
 	for c in ax.containers:
 		if mask:
-			labels = [v if v > threshold  else "<5" for v in c.datavalues]
+			labels = [
+				v if v >= threshold or v == 0 else "<5" for v in c.datavalues]
 		else:
 			labels =  [v for v in c.datavalues]
 		ax.bar_label(
@@ -133,7 +159,7 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 		conc_age = cohorts.all_age
 		conc_anc = cohorts.all_ancestry
 		conc_sex = cohorts.all_sex
-		conc_mort = cohorts.all_mort
+		conc_mort = cohorts.all_mortality
 		names = cohorts.name
 	else:
 		# could optimize memory by using iterator instead of cohorts.
@@ -144,7 +170,7 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 		conc_age = pd.concat([df.all_age for df in cohorts], keys=names).reset_index()
 		conc_anc = pd.concat([df.all_ancestry for df in cohorts], keys=names).reset_index()
 		conc_sex = pd.concat([df.all_sex for df in cohorts], keys=names).reset_index()
-		conc_mort = pd.concat([df.all_mort for df in cohorts], keys=names).reset_index()
+		conc_mort = pd.concat([df.all_mortality for df in cohorts], keys=names).reset_index()
 	
 
 	plt.close()
@@ -259,6 +285,7 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			table=conc_age,
 			x='age_at_consent',
 			ax=axs1,
+			binwidth=5,
 			hue='level_0',
 			mask=mask
 			)
