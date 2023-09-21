@@ -7,7 +7,6 @@
 #### can be applied for cancer as well as rare disease cases.
 #### last update: 2023.09.12
 
-
 import pandas as pd
 import numpy as np
 import warnings
@@ -17,12 +16,9 @@ from gelpack.gel_utils import lab_to_df
 
 class Cohort(object):
 
-	def __init__(self, featdict, version, name=None, participants=None):
+	def __init__(self, version, featdict=None, participants=None, name=None):
 		# check if the featdict has correctly been generated.
-		if (
-			not featdict
-			and not participants
-			):
+		if (featdict is None and participants is None):
 			raise ValueError(
 				'either featdict or participants must be given to create cohort.'
 			)
@@ -58,11 +54,18 @@ class Cohort(object):
 		self.feature_tables = {}
 		self.name = name
 
-		if participants:
-			self.custom_pids(
-				pids_lst_file=participants,
-				action='include'
+		if participants is not None:
+			if participants == 'all_cancer':
+				ca_pids = self.get_cancer_parts(dr=version).participant_id
+				self.custom_pids(
+					pids_lst_file=ca_pids,
+					action='include'
 				)
+			else:
+				self.custom_pids(
+					pids_lst_file=participants,
+					action='include'
+					)
 		
 
 	################# functions building the self ######################
@@ -93,6 +96,9 @@ class Cohort(object):
 		# allow custom participants ids to be added to the cohort.
 		if isinstance(pids_lst_file, list) and not isinstance(pids_lst_file, str):
 			ids = pd.Series(pids_lst_file, name='participant_id')
+		elif isinstance(pids_lst_file, pd.Series):
+			ids = pids_lst_file
+			ids.name ='participant_id'
 		elif pids_lst_file.endswith(('.tsv', ".csv")):
 			import csv
 			# check if the file has one column and a header:
@@ -188,7 +194,16 @@ class Cohort(object):
 				pass
 			except NameError:
 				pass
-
+	
+	def get_cancer_parts(cls, dr):
+		sqlstr = (
+			'''
+			SELECT
+				participant_id,
+			FROM
+				cancer_analysis
+			''')
+		return lab_to_df(sql_query=sqlstr, dr=dr)
 
 	def get_term_pids(self):
 		"""get participant_ids associated with the given disease_terms from
@@ -955,9 +970,56 @@ class Cohort(object):
 					tmp_mort['date_of_death'].isna(), 'Alive', 'Deceased')
 				self.mortality_table[key] = tmp_mort  # unlisting the datarame.
 				self.feature_tables['mortality'] = self.mortality_table
+	
+	########### sample level data ###################
+	
+	def rd_sample_data(self):
+		
+		# what strategy can we use to use this function for both RD and CA?
+		self.rd_sample = {}
 
 
-	def sample_metadata(self):
+	def ca_sample_data(self):
+		# for each participants retrieve the samples from cancer_analysis
+		self.cancer_samples = {}
+
+		for key, pid in self.pids.items():
+			ca_samp_query = (f'''
+				SELECT
+					ca.participant_id,
+					ca.tumour_sample_platekey,
+					ca.germline_sample_platekey,
+					ca.tumour_type,
+					ca.disease_type,
+					ca.disease_sub_type,
+					ca.study_abbreviation,
+					ca.tumour_delivery_date,
+					ca.germline_delivery_date,
+					ca.preparation_method,
+					ca.tumour_purity,
+					ca.coverage_homogeneity,
+					ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
+					da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
+					ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
+					da.somatic_sv_vcf AS dragen_somatic_sv_vcf,
+					da.somatic_cnv_vcf AS dragen_somatic_cnv_vcf
+				FROM
+					cancer_analysis ca
+				LEFT JOIN
+					cancer_100K_genomes_realigned_on_pipeline_2 da
+				ON
+					ca.tumour_sample_platekey = da.tumour_sample_platekey
+				WHERE
+					ca.participant_id IN {*pid,}
+				''')
+			ca_samp = lab_to_df(
+				sql_query=ca_samp_query,
+				dr=self.version
+			)
+			self.cancer_samples[key] = ca_samp	
+
+
+	def omics_sample_metadata(self):
 		"""Extract sample metadata from labkey. Specifically looking at omics
 		sample availability and location. Please keep in mind the sample counts
 		are subject to change.
@@ -1040,7 +1102,7 @@ class Cohort(object):
 
 		
 			
-	################ summarysing the self ##################
+	################ summarysing the participants ##################
 	def concat_cohort(cls, dc):
 		"""concatenate the dataframes in a dictionary, note; the dicitonarys
 		should have the same structure / columns. 
@@ -1489,9 +1551,9 @@ class Cohort(object):
 							.groupby(['participant_id','simple_code'])
 							.size()
 							).unstack()
+
+
 	############### filtering the cohort ####################
-
-
 	def feature_filter(self, query_string, action='exclude'):
 		try:
 			filter_cohort = self.all_data.query(query_string, engine='python')
