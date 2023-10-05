@@ -16,11 +16,17 @@ from gelpack.gel_utils import lab_to_df
 
 class Cohort(object):
 
-	def __init__(self, version, featdict=None, participants=None, name=None):
+	def __init__(self,
+		version, 
+		featdict=None, 
+		participants=None, 
+		platekeys=None, 
+		name=None):
 		# check if the featdict has correctly been generated.
-		if (featdict is None and participants is None):
+		# how to handel multiple? (featdict + platekeys?)
+		if (featdict is None and participants is None and platekeys is None):
 			raise ValueError(
-				'either featdict or participants must be given to create cohort.'
+				'either featdict, participant ids or platekeys must be given to create cohort.'
 			)
 		if featdict:
 			if not any(
@@ -67,6 +73,14 @@ class Cohort(object):
 					action='include'
 					)
 		
+		if platekeys is not None:
+			plate_pids = self.get_pids_per_platekey(
+					platekeys,dr=version
+					).participant_id
+			self.custom_pids(
+				pids_lst_file=plate_pids,
+				action='include'
+				)
 
 	################# functions building the self ######################
 	def custom_pids(self, pids_lst_file, action='include'):
@@ -204,6 +218,31 @@ class Cohort(object):
 				cancer_analysis
 			''')
 		return lab_to_df(sql_query=sqlstr, dr=dr)
+
+	def limit_to_cancer_samples(self, pids, dr):
+		# filter the cohort to only include participants where we have recruited
+		# the participant for a particular cancer type. (we have the tumour
+		# Sample of the cancer of interest).
+
+		# depends on featdict, or on filter?
+		# confirm disease type.
+		#
+		return None
+
+	
+	def get_pids_per_platekey(cls, platekeys, dr):
+		sqlstr = (
+			f'''
+			SELECT
+				participant_id,
+				plate_key
+			FROM
+				plated_sample
+			WHERE
+				plate_key in {*platekeys,}
+			''')
+		return lab_to_df(sql_query=sqlstr, dr=dr)
+
 
 	def get_term_pids(self):
 		"""get participant_ids associated with the given disease_terms from

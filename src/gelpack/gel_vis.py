@@ -1,7 +1,7 @@
 #### Christian J. Bouwens
 #### BRSC team
 #### visualisations
-#### last update: 2023.09.12
+#### last update: 2023.10.05
 
 def simple_count_plt(
 		table, 
@@ -9,17 +9,40 @@ def simple_count_plt(
 		ax, 
 		colour_pal=None, 
 		hue=None,
-		mask=False):
+		mask=False,
+		scale=False):
 	import seaborn as sns
+	import matplotlib.ticker as mtick
+	from itertools import chain
+	from itertools import repeat
+	
 	threshold = 5
+	
 	if hue:
-		table_count = (table
-			.groupby([hue, x])
-			.size()
-			.reset_index(drop=False, name='count')
-			)
+		if scale:
+			table_count = (table[hue]
+				.groupby(table[x])
+				.value_counts(normalize=True)
+				.reset_index(drop=False, name='count')
+				)
+			scale_threshold = [(5/y) for y in table[hue].groupby(table[x]).size()]
+		else:
+			table_count = (table
+				.groupby([hue, x])
+				.size()
+				.reset_index(drop=False, name='count')
+				)
 	else:
-		table_count = table.value_counts(x).reset_index(drop=False, name='count')
+		if scale:
+			table_count = (table[x]
+				.value_counts(normalize=True)
+				.reset_index(drop=False, name='count')
+				.rename({'index':'sex'},axis=1))
+			scale_threshold = 5/len(table)
+		else:
+			table_count = (table
+				.value_counts(x)
+				.reset_index(drop=False, name='count'))
 	
 	sns.set_theme(style='whitegrid')
 	sns.barplot(
@@ -28,26 +51,63 @@ def simple_count_plt(
 		y='count',
 		palette=colour_pal,
 		ax=ax,
-		hue=hue
+		hue=hue,
 		)
 	# removing bars that need masking.
-	for bar in ax.patches:
+	# the number of patches do not match the threshold, sometimes
+	# there are 2, sometimes there are 3. 
+	# we have to repeat scale_threshold for the number of bars divided by 
+	# the number of hues.
+	if hue and scale:
+		nbar=len(ax.patches)
+		nhues=len(scale_threshold)
+		rep_scale_thres = list(
+			chain(*(repeat(elem, (nbar//nhues)) for elem in scale_threshold))
+			)
+
+	for i,bar in enumerate(ax.patches):
 		if mask:
-			if bar.get_height() < threshold:
-				bar.set_height(h=0)
+			if scale:
+				if hue:
+					if bar.get_height() < rep_scale_thres[i]:
+						bar.set_height(h=0)
+				else:
+					if bar.get_height() < scale_threshold:
+						bar.set_height(h=0)
+			else:
+				if bar.get_height() < threshold:
+					bar.set_height(h=0)
 	# adding the numeric values on top of the bars.
-	for c in ax.containers:
+	for i,c in enumerate(ax.containers):
 		if mask:
-			labels = [
-				v if v >= threshold or v == 0 else "<5" for v in c.datavalues]
+			if scale:
+				if hue:
+					labels = [
+						f'{(v):.0%}' if v >= rep_scale_thres[i] or v == 0 else
+						"<5" for v in c.datavalues
+						]
+				else:
+					labels = [
+						f'{(v):.0%}' if v >= scale_threshold or v == 0 else
+						"<5" for v in c.datavalues
+						]
+			else:
+				labels = [v if v >= threshold or v == 0 else
+				"<5" for v in c.datavalues]
 		else:
-			labels =  [v for v in c.datavalues]
+			if scale:
+				labels =  [f'{(v):.0%}' for v in c.datavalues]
+			else:
+				labels = [v for v in c.datavalues]
+
 		ax.bar_label(
 			c,
 			labels=labels,
+			fmt='%.1f',
 			padding=-1,
 			fontsize=8)
-
+	if scale:
+		ax.yaxis.set_major_formatter(mtick.PercentFormatter(1))
 	ax.set_ylabel(None)
 	ax.xaxis.set_label_position('top')
 	ax.margins(.1,0.25)
@@ -59,41 +119,64 @@ def simple_hist_plt(
 	ax, 
 	binwidth=5,  
 	hue=None, 
-	mask=False, 
-	discrete=False):
+	mask=False,
+	scale=False):
 
 	import seaborn as sns
+	import matplotlib.ticker as mtick
 
-	threshold = 5
 	sns.set_theme(style='whitegrid')
-	sns.histplot(
-		data=table,
-		x=x,
-		binwidth=binwidth,
-		element="bars",
-		ax=ax,
-		hue=hue,
-		discrete=discrete
-		)
+	if not scale:
+		sns.histplot(
+			data=table,
+			x=x,
+			binwidth=binwidth,
+			element="bars",
+			ax=ax,
+			hue=hue,
+			)
 
+	if scale:
+		sns.histplot(
+			data=table,
+			x=x,
+			binwidth=binwidth,
+			element="bars",
+			ax=ax,
+			hue=hue,
+			stat='percent',
+			common_norm=False
+			)
+		datasize = len(table[x])
+	threshold = 5
 	# mask bars under 5 counts.
 	for bar in ax.patches:
 		if mask:
 			if bar.get_height() < threshold:
 				bar.set_height(h=0)
+
 	# mask labels under 5 counts
 	for c in ax.containers:
 		if mask:
-			labels = [
-				v if v >= threshold or v == 0 else "<5" for v in c.datavalues]
+			if scale:
+				labels = [f'{(v/100):.1%}' if v >= threshold or v == 0 else
+				 "<5" for v in c.datavalues]
+			else:
+				labels = [v if v >= threshold or v == 0 else
+				 "<5" for v in c.datavalues]
 		else:
-			labels =  [v for v in c.datavalues]
+			if scale:
+				labels =  [f'{(v/100):.1%}' for v in c.datavalues]
+			else:
+				labels = [v for v in c.datavalues]
+
 		ax.bar_label(
 			c,
 			labels=labels,
 			padding=-1,
 			fontsize=8)
-
+	# if scale:
+	# 	ax.yaxis.set_major_formatter(mtick.PercentFormatter(datasize))
 	ax.set_ylabel(None)
 	ax.xaxis.set_label_position('top') 
 	ax.margins(0,0.25)
@@ -101,8 +184,15 @@ def simple_hist_plt(
 
 
 
+
 # function to create visualisation for A or AB cohorts.
-def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
+def vis_cohorts(
+	cohorts, 
+	coldict=None, 
+	names=None, 
+	mask=True, 
+	show=False,
+	scale=False):
 	"""creates a figure of age, ancestry, mortality and sex in a grid pattern.
 	the data in the figure can be masked (no counts <5, or not).
 
@@ -115,7 +205,16 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 		mask (bool, optional): masks counts lower than 5. Defaults to True.
 		ploting (bool,optional): prints the plot using plt.show if true, returns
 			the fig variable if False. 
+		scale (bool,optional): scales the values in the plot to percentages. 
+			Defaults to False.
 	"""
+	# cohorts=[group1, group2]
+	# coldict=None
+	# names=None
+	# mask=True
+	# scale=True
+	# show=True
+
 	import seaborn as sns
 	import matplotlib.pyplot as plt
 	import pandas as pd
@@ -133,7 +232,10 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			'grey':'#c3c4bf',
 			'white': '#FFFFFF'
 			},
-		'sex_col':{'Male':'#26913D', 'Female':'#2B2F3B'},
+		'sex_col':{
+			'Male':'#26913D', 
+			'Female':'#2B2F3B',
+			'Indeterminate':'#c3c4bf'},
 		'ancestry_col':{
 			'AFR':'#26913D',
 			'AMR':'#005eb8',
@@ -164,9 +266,11 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 	else:
 		# could optimize memory by using iterator instead of cohorts.
 		mult_cohorts=True
-
+		# if there are no names set for the cohort the script will fail.
 		if not names:
 			names = [df.name for df in cohorts]
+		if len(names) != len(cohorts):
+			raise ValueError('No names can be attributed to the cohorts.')
 		conc_age = pd.concat([df.all_age for df in cohorts], keys=names).reset_index()
 		conc_anc = pd.concat([df.all_ancestry for df in cohorts], keys=names).reset_index()
 		conc_sex = pd.concat([df.all_sex for df in cohorts], keys=names).reset_index()
@@ -183,14 +287,21 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 	axs4 = fig.add_subplot(gs[1,2])
 	
 	### sex ###
-	if mult_cohorts:
+	if mult_cohorts:  # can we scale per level_0 instead of by total?
+		# (conc_sex
+		# 	.groupby(conc_sex['level_0'])
+		# 	.value_counts(normalize=True)
+		# 	.reset_index())
+		# 	.pipe((simple_count_plt, "data"), x='level_0', y=y, hue=hue))
 		simple_count_plt(
 			table=conc_sex,
 			hue='sex',
 			ax=axs2,
 			colour_pal=sex_cols,
 			x='level_0',
-			mask=mask
+			mask=mask,
+			scale=scale,
+			# estimator=lambda x: sum(x=='level_0')*100.0/len(x)
 			)
 		sns.move_legend(
 			axs2, "upper left",
@@ -199,7 +310,7 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			frameon=False,
 			# columnspacing=0.8,
 			handletextpad=0.2,
-	    )
+		)
 	else:
 		simple_count_plt(
 			table=conc_sex,
@@ -207,7 +318,8 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			ax=axs2,
 			colour_pal=sex_cols,
 			hue=None,
-			mask=mask
+			mask=mask,
+			scale=scale
 			)
 
 	axs2.set_ylabel(None)
@@ -223,7 +335,9 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			ax=axs3,
 			colour_pal=ancestry_cols,
 			x='level_0',
-			mask=mask
+			mask=mask,
+			scale=scale,
+			# estimator=lambda x: sum(x=='level_0')*100.0/len(x)
 			)
 		sns.move_legend(
 			axs3, "lower center",
@@ -233,7 +347,7 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			columnspacing=0.1,
 			handletextpad=0.2,
 			title=None
-	    )
+		)
 	else:
 		simple_count_plt(
 			table=conc_anc,
@@ -241,7 +355,8 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			ax=axs3,
 			colour_pal=ancestry_cols,
 			hue=None,
-			mask=mask
+			mask=mask,
+			scale=scale
 			)
 	axs3.set_ylabel(None)
 	axs3.set_xlabel('Predicted Ancestry')
@@ -256,7 +371,9 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			ax=axs4,
 			colour_pal=vital_cols,
 			x='level_0',
-			mask=mask
+			mask=mask,
+			scale=scale,
+			# estimator=lambda x: sum(x=='level_0')*100.0/len(x)
 			)
 		sns.move_legend(
 			axs4, "upper left",
@@ -266,7 +383,7 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			# columnspacing=0.8,
 			handletextpad=0.2,
 			title=None
-	    )
+		)
 	else:
 		simple_count_plt(
 			table=conc_mort,
@@ -274,7 +391,8 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			ax=axs4,
 			colour_pal=vital_cols,
 			hue=None,
-			mask=mask
+			mask=mask,
+			scale=scale
 			)
 	axs4.set_ylabel(None)
 	axs4.set_xlabel('Vital status')
@@ -287,7 +405,8 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			ax=axs1,
 			binwidth=5,
 			hue='level_0',
-			mask=mask
+			mask=mask,
+			scale=scale
 			)
 		sns.move_legend(
 			axs1,
@@ -302,7 +421,8 @@ def vis_cohorts(cohorts, coldict=None, names=None, mask=True, show=False):
 			x='age_at_consent',
 			ax=axs1,
 			hue=None,
-			mask=mask
+			mask=mask,
+			scale=scale
 			)
 	axs1.set_ylabel(None)
 	axs1.set_xlabel('Age')
