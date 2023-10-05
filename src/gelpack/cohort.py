@@ -81,6 +81,7 @@ class Cohort(object):
 				pids_lst_file=plate_pids,
 				action='include'
 				)
+			self.platekeys = platekeys
 
 	################# functions building the self ######################
 	def custom_pids(self, pids_lst_file, action='include'):
@@ -1011,52 +1012,94 @@ class Cohort(object):
 				self.feature_tables['mortality'] = self.mortality_table
 	
 	########### sample level data ###################
-	
+
 	def rd_sample_data(self):
 		
 		# what strategy can we use to use this function for both RD and CA?
 		self.rd_sample = {}
 
-
+# would we use this?
 	def ca_sample_data(self):
-		# for each participants retrieve the samples from cancer_analysis
-		self.cancer_samples = {}
+		if not self.platekeys:
+			# for each participants retrieve the samples from cancer_analysis
+			self.cancer_samples = {}
 
-		for key, pid in self.pids.items():
-			ca_samp_query = (f'''
-				SELECT
-					ca.participant_id,
-					ca.tumour_sample_platekey,
-					ca.germline_sample_platekey,
-					ca.tumour_type,
-					ca.disease_type,
-					ca.disease_sub_type,
-					ca.study_abbreviation,
-					ca.tumour_delivery_date,
-					ca.germline_delivery_date,
-					ca.preparation_method,
-					ca.tumour_purity,
-					ca.coverage_homogeneity,
-					ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
-					da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
-					ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
-					da.somatic_sv_vcf AS dragen_somatic_sv_vcf,
-					da.somatic_cnv_vcf AS dragen_somatic_cnv_vcf
-				FROM
-					cancer_analysis ca
-				LEFT JOIN
-					cancer_100K_genomes_realigned_on_pipeline_2 da
-				ON
-					ca.tumour_sample_platekey = da.tumour_sample_platekey
-				WHERE
-					ca.participant_id IN {*pid,}
-				''')
-			ca_samp = lab_to_df(
-				sql_query=ca_samp_query,
-				dr=self.version
-			)
-			self.cancer_samples[key] = ca_samp	
+			for key, pid in self.pids.items():
+				ca_samp_query = (f'''
+					SELECT
+						ca.participant_id,
+						ca.tumour_sample_platekey,
+						ca.germline_sample_platekey,
+						ca.tumour_type,
+						ca.disease_type,
+						ca.disease_sub_type,
+						ca.study_abbreviation,
+						ca.tumour_delivery_date,
+						ca.germline_delivery_date,
+						ca.preparation_method,
+						ca.tumour_purity,
+						ca.coverage_homogeneity,
+						ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
+						da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
+						ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
+						da.somatic_sv_vcf AS dragen_somatic_sv_vcf,
+						da.somatic_cnv_vcf AS dragen_somatic_cnv_vcf
+					FROM
+						cancer_analysis ca
+					LEFT JOIN
+						cancer_100K_genomes_realigned_on_pipeline_2 da
+					ON
+						ca.tumour_sample_platekey = da.tumour_sample_platekey
+					WHERE
+						ca.participant_id IN {*pid,}
+					''')
+				ca_samp = lab_to_df(
+					sql_query=ca_samp_query,
+					dr=self.version
+				)
+				self.cancer_samples[key] = ca_samp
+			self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
+			self.platekeys=self.all_cancer_samples['tumour_sample_platekey']
+		
+		if self.platekeys:
+			self.cancer_samples = {}
 
+			for key, pid in self.pids.items():
+				ca_samp_query = (f'''
+					SELECT
+						ca.participant_id,
+						ca.tumour_sample_platekey,
+						ca.germline_sample_platekey,
+						ca.tumour_type,
+						ca.disease_type,
+						ca.disease_sub_type,
+						ca.study_abbreviation,
+						ca.tumour_delivery_date,
+						ca.germline_delivery_date,
+						ca.preparation_method,
+						ca.tumour_purity,
+						ca.coverage_homogeneity,
+						ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
+						da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
+						ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
+						da.somatic_sv_vcf AS dragen_somatic_sv_vcf,
+						da.somatic_cnv_vcf AS dragen_somatic_cnv_vcf
+					FROM
+						cancer_analysis ca
+					LEFT JOIN
+						cancer_100K_genomes_realigned_on_pipeline_2 da
+					ON
+						ca.tumour_sample_platekey = da.tumour_sample_platekey
+					WHERE
+						ca.tumour_sample_platekey IN {*self.platekeys,}
+					''')
+				ca_samp = lab_to_df(
+					sql_query=ca_samp_query,
+					dr=self.version
+				)
+				self.cancer_samples[key] = ca_samp	
+			self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
+			
 
 	def omics_sample_metadata(self):
 		"""Extract sample metadata from labkey. Specifically looking at omics

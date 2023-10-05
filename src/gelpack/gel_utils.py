@@ -123,6 +123,8 @@ def assign_groups(dataframe, vars, type='and'):
 
 	return dataframe
 
+# can we assign groups on multiple cohorts?
+
 
 def force_list(iter):
 	# a test to make sure the gene is in a list.
