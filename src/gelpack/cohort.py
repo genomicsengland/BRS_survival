@@ -55,10 +55,12 @@ class Cohort(object):
 			# we could add the cancer disease types here.
 			# can we build a self based on morphology/histology codes?
 			# or let people do that themselves and just import the data from pids?
+		self.featdict=featdict
 		self.version = version
 		self.pids = {}
 		self.feature_tables = {}
 		self.name = name
+		self.platekeys = None
 
 		if participants is not None:
 			if participants == 'all_cancer':
@@ -146,9 +148,9 @@ class Cohort(object):
 			self.pids['custom'] = ids
 		elif action == 'exclude':
 			for keys, table in self.pids.items():
-				self.pids[keys] = pd.DataFrame(
-					{'participant_id' : [x for x in table if x not in ids]}
-					)['participant_id']
+				self.pids[keys] = pd.Series(
+					[x for x in table if x not in list(ids)], 
+					name='participant_id')
 				if keys == 'dterm':
 					self.dterm_table = self.dterm_table.loc[
 						~self.dterm_table['participant_id'].isin(ids)
@@ -210,6 +212,7 @@ class Cohort(object):
 			except NameError:
 				pass
 	
+
 	def get_cancer_parts(cls, dr):
 		sqlstr = (
 			'''
@@ -220,14 +223,32 @@ class Cohort(object):
 			''')
 		return lab_to_df(sql_query=sqlstr, dr=dr)
 
-	def limit_to_cancer_samples(self, pids, dr):
+
+
+	# if the cohort has been created on platekeys this function is redundant.
+	# if we are going from participant_id -> platekeys we definitly need to 
+	# make sure we grab only samples of the relevant cancer type.
+	# and remove the rest.
+	def limit_cohort_to_cancer_type(self, pids, dr):
 		# filter the cohort to only include participants where we have recruited
 		# the participant for a particular cancer type. (we have the tumour
 		# Sample of the cancer of interest).
 
-		# depends on featdict, or on filter?
-		# confirm disease type.
-		#
+		# depends on featdict
+		# confirm disease type. -> translate to either study_abb or GEL disease type.
+		# get all cancer samples from cancer_analysis
+		# ca = get_cancer_parts(dr=self.version)
+
+		self.ca_sample_data()
+
+		# for each sample in ca_sample_data, 
+		# check if its a sample recruited for featdict.
+		# this requires the featdict to be translated to diseaes_types / study_abbreviations.
+		from gelpack.gel_utils import translateicd
+		feat_icd10_trans = translateicd(self.featdict['icd10'])
+		self.cancer_samples['icd10']
+
+		# only
 		return None
 
 	
@@ -1018,11 +1039,27 @@ class Cohort(object):
 		# what strategy can we use to use this function for both RD and CA?
 		self.rd_sample = {}
 
-# would we use this?
 	def ca_sample_data(self):
-		if not self.platekeys:
-			# for each participants retrieve the samples from cancer_analysis
-			self.cancer_samples = {}
+		"""query labkey for cancer sample information. Data is retrieved from 
+		cancer analysis (for nsv4 sample statts) and supplemented with dragen 3.2
+		realigned samples.
+		We make a distinction between cohorts generated from platekeys and
+		cohorts generated from participant_ids / disease terms. As we want to limit
+		the output to specific platekeys in the former, but may want to grab all 
+		samples per participant_id for the latter.
+		(there are multiple tumour samples available)
+
+		Args:
+			platekeys (pd.Array or list): list of tumour_sample_platekeys to include.
+			self.pids (dict of list): list of tumour_sample_platekeys to include.
+			version (str): Data release version
+
+		Returns:
+			mortality_table (pd.DataFrame): date of death per participant_id
+		"""
+		self.cancer_samples = {}
+
+		if self.platekeys is not None:
 
 			for key, pid in self.pids.items():
 				ca_samp_query = (f'''
@@ -1034,11 +1071,56 @@ class Cohort(object):
 						ca.disease_type,
 						ca.disease_sub_type,
 						ca.study_abbreviation,
+						ca.morphology_icd,
+						ca.histology_coded,
 						ca.tumour_delivery_date,
 						ca.germline_delivery_date,
 						ca.preparation_method,
 						ca.tumour_purity,
 						ca.coverage_homogeneity,
+						ca.preparation_method,
+						ca.somatic_coding_variants_per_mb AS tmb,
+						ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
+						da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
+						ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
+						da.somatic_sv_vcf AS dragen_somatic_sv_vcf,
+						da.somatic_cnv_vcf AS dragen_somatic_cnv_vcf
+					FROM
+						cancer_analysis ca
+					LEFT JOIN
+						cancer_100K_genomes_realigned_on_pipeline_2 da
+					ON
+						ca.tumour_sample_platekey = da.tumour_sample_platekey
+					WHERE
+						ca.tumour_sample_platekey IN {*self.platekeys,}
+					''')
+				ca_samp = lab_to_df(
+					sql_query=ca_samp_query,
+					dr=self.version
+				)
+				self.cancer_samples[key] = ca_samp	
+			self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
+		else:
+			# for each participants retrieve the samples from cancer_analysis
+			for key, pid in self.pids.items():
+				ca_samp_query = (f'''
+					SELECT
+						ca.participant_id,
+						ca.tumour_sample_platekey,
+						ca.germline_sample_platekey,
+						ca.tumour_type,
+						ca.disease_type,
+						ca.disease_sub_type,
+						ca.study_abbreviation,
+						ca.morphology_icd,
+						ca.histology_coded,
+						ca.tumour_delivery_date,
+						ca.germline_delivery_date,
+						ca.preparation_method,
+						ca.tumour_purity,
+						ca.coverage_homogeneity,
+						ca.preparation_method,
+						ca.somatic_coding_variants_per_mb AS tmb,
 						ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
 						da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
 						ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
@@ -1060,46 +1142,9 @@ class Cohort(object):
 				self.cancer_samples[key] = ca_samp
 			self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
 			self.platekeys=self.all_cancer_samples['tumour_sample_platekey']
-		
-		if self.platekeys:
-			self.cancer_samples = {}
 
-			for key, pid in self.pids.items():
-				ca_samp_query = (f'''
-					SELECT
-						ca.participant_id,
-						ca.tumour_sample_platekey,
-						ca.germline_sample_platekey,
-						ca.tumour_type,
-						ca.disease_type,
-						ca.disease_sub_type,
-						ca.study_abbreviation,
-						ca.tumour_delivery_date,
-						ca.germline_delivery_date,
-						ca.preparation_method,
-						ca.tumour_purity,
-						ca.coverage_homogeneity,
-						ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
-						da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
-						ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
-						da.somatic_sv_vcf AS dragen_somatic_sv_vcf,
-						da.somatic_cnv_vcf AS dragen_somatic_cnv_vcf
-					FROM
-						cancer_analysis ca
-					LEFT JOIN
-						cancer_100K_genomes_realigned_on_pipeline_2 da
-					ON
-						ca.tumour_sample_platekey = da.tumour_sample_platekey
-					WHERE
-						ca.tumour_sample_platekey IN {*self.platekeys,}
-					''')
-				ca_samp = lab_to_df(
-					sql_query=ca_samp_query,
-					dr=self.version
-				)
-				self.cancer_samples[key] = ca_samp	
-			self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
-			
+
+
 
 	def omics_sample_metadata(self):
 		"""Extract sample metadata from labkey. Specifically looking at omics
@@ -1202,7 +1247,9 @@ class Cohort(object):
 				.drop_duplicates()
 				)
 		else:
-			concatdc = next(iter(dc.values()))
+			concatdc = next(iter(
+				dc.values()
+				)).drop_duplicates()
 
 		return concatdc
 	
@@ -1672,6 +1719,8 @@ class Cohort(object):
 			pids_lst_file=filter_pids,
 			action='exclude'
 			)
+		# refresh trhe all_feature.
+		self.concat_all()
 
 # if we set the sql table strings in a dictionary per version - which is loaded 
 # upon setting the version -> easy to do version control.
