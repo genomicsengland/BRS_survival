@@ -59,8 +59,10 @@ class Cohort(object):
 		self.version = version
 		self.pids = {}
 		self.feature_tables = {}
+		self.sample_tables = {}
 		self.name = name
 		self.platekeys = None
+		self.groups = {}  # to assign intra-cohort groups.
 
 		if participants is not None:
 			if participants == 'all_cancer':
@@ -212,6 +214,14 @@ class Cohort(object):
 			except NameError:
 				pass
 	
+
+	def add_to_group(self, id, group):
+		if group not in self.groups.keys():
+			self.groups[group] = []
+		# confirm the id is in the cohort.
+		if [x.eq(id) for x in self.pids.values()][0].any():
+			self.groups[group].append(id)
+
 
 	def get_cancer_parts(cls, dr):
 		sqlstr = (
@@ -764,7 +774,6 @@ class Cohort(object):
 
 
 	################ adding features to the self ##################
-	# we grab the unique participants here.
 	def age(self):
 		"""Get the age at consent and current age for each participant in the 
 		self. This function does go over each source (cancer, icd10, hpo...)
@@ -794,7 +803,6 @@ class Cohort(object):
 					participant_id IN {*pid,}
 				''')
 			# import datetime
-
 			age_df = lab_to_df(
 				sql_query = age_sql,
 				dr = self.version
@@ -836,9 +844,7 @@ class Cohort(object):
 						diag = x['date_of_consent']),
 				axis=1
 			)
-
 			# age qc:
-			## TODO double check this is correct.
 			age_df['age_qc'] = np.where(
 				(  
 				(age_df['year_of_birth'] == pd.to_datetime(
@@ -971,7 +977,6 @@ class Cohort(object):
 		Returns:
 			mortality_table (pd.DataFrame): date of death per participant_id
 		"""
-
 		# import date_of_death per participant_id from 'mortality'
 		self.mortality_table = {}
 		for key, pid in self.pids.items():
@@ -1032,12 +1037,68 @@ class Cohort(object):
 				self.mortality_table[key] = tmp_mort  # unlisting the datarame.
 				self.feature_tables['mortality'] = self.mortality_table
 	
-	########### sample level data ###################
 
+	########### sample level data ###################
 	def rd_sample_data(self):
-		
-		# what strategy can we use to use this function for both RD and CA?
-		self.rd_sample = {}
+		self.rd_samples = {}
+
+		if self.platekeys is not None:
+
+			for key, pid in self.pids.items():
+				rd_samp_query = (f'''
+					SELECT
+						participant_id,
+						plate_key,
+						family_id,
+						assembly,
+						is_proband,
+						normalised_specific_disease_proband,
+						affection_status,
+						platypus_vcf_path,
+						case_solved_family,
+						last_status
+					FROM
+						rare_disease_interpreted
+					WHERE
+						plate_key IN {*self.platekeys,}
+					''')
+				rd_samp = lab_to_df(
+					sql_query=rd_samp_query,
+					dr=self.version
+				)
+				self.rd_samples[key] = rd_samp	
+			self.sample_tables['rare_disease_samples'] =  self.rd_samples
+		else:
+			# for each participants retrieve the samples from cancer_analysis
+			for key, pid in self.pids.items():
+				rd_samp_query = (f'''
+				SELECT
+						participant_id,
+						plate_key,
+						family_id,
+						assembly,
+						is_proband,
+						normalised_specific_disease_proband,
+						affection_status,
+						platypus_vcf_path,
+						case_solved_family,
+						last_status
+					FROM
+						rare_disease_interpreted
+					
+					WHERE
+						participant_id IN {*pid,}
+					''')
+				rd_samp = lab_to_df(
+					sql_query=rd_samp_query,
+					dr=self.version
+				)
+				self.rd_samples[key] = rd_samp
+			# self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
+			# concat before adding to sample_tables?
+			self.sample_tables['rare_disease_samples'] =  self.rd_samples
+			self.platekeys=self.concat_cohort(self.rd_samples)['plate_key']
+
 
 	def ca_sample_data(self):
 		"""query labkey for cancer sample information. Data is retrieved from 
@@ -1099,7 +1160,9 @@ class Cohort(object):
 					dr=self.version
 				)
 				self.cancer_samples[key] = ca_samp	
-			self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
+			# cancer_samples to concat in concat_all
+			# self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
+			self.sample_tables['cancer_samples'] =  self.cancer_samples
 		else:
 			# for each participants retrieve the samples from cancer_analysis
 			for key, pid in self.pids.items():
@@ -1140,10 +1203,10 @@ class Cohort(object):
 					dr=self.version
 				)
 				self.cancer_samples[key] = ca_samp
-			self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
-			self.platekeys=self.all_cancer_samples['tumour_sample_platekey']
-
-
+			# self.all_cancer_samples = self.concat_cohort(self.cancer_samples)
+			# concat before adding to sample_tables?
+			self.sample_tables['cancer_samples'] =  self.cancer_samples
+			self.platekeys=self.concat_cohort(self.cancer_samples)['tumour_sample_platekey']
 
 
 	def omics_sample_metadata(self):
@@ -1224,8 +1287,9 @@ class Cohort(object):
 				dr=self.version
 				)
 			self.gmc_registration[key] = registration_loc
+
 		self.feature_tables['gmc_registration'] = self.gmc_registration
-		self.feature_tables['omics_sample_data'] = self.omics_sample_data
+		self.sample_tables['omics_sample_data'] = self.omics_sample_data
 
 		
 			
@@ -1253,6 +1317,7 @@ class Cohort(object):
 
 		return concatdc
 	
+
 	def summarize(cls, pid=None, anc=None, mort=None, age=None, sex=None):
 		"""gather up self data and return summary stats. including:
 		- number of unique participants
@@ -1375,8 +1440,13 @@ class Cohort(object):
 			RuntimeError: When no valid cohort is present
 			RuntimeError: when no valid features are present
 		"""
-		# keeping all the keys and features in seperate tables does add a lot 
-		# of overhead when wanting to include new features.
+		# this function requires some restructuring, 
+		# right now it checks if there are participant_ids,
+		# if there are features, and if there are samples.
+		# if either one of those are not present it will return a runtime error
+		# probably better to:
+		# 
+		# 1. only return a runtime error if there are no participant ids
 		diag_keys = [
 			'icd10',
 			'dterm',
@@ -1384,16 +1454,14 @@ class Cohort(object):
 			'hpo',
 			'custom'
 		]
-		# we are concatenating all the potential diagnosis, hpo, icd10, disease terms
-		# as the researcher may want to apply filtering to specific parts of the self.
-		# e.g. filter out participants under age 30 with ICD-10 code A. But keep 
-		# all participants (irrelevant of age) for a particular hpo term. If a participant
-		# is included for the icd-10 code AND the hpo term we don't want to completely
-		# remove the participant_id from self.pids.
+		
 		if all([not k in self.pids.keys() for k in diag_keys]):
 			raise RuntimeError('No valid cohorts to concatenate found')
 		else:
-			# check which keys have been included in the cohort.
+			# 2. concat the different participantids in self.all_pids.
+			self.all_pids = self.concat_cohort(self.pids)
+			tmp_merge = [self.all_pids]
+			# 3. concat the diagnosis fields.
 			conc_tables = []
 			for key in diag_keys:
 				if key in self.pids.keys():
@@ -1436,47 +1504,68 @@ class Cohort(object):
 				diag_table = conc_tables[0]
 
 
-		# feature_tables is a method for tracking what
-		# features we've calculated in the cohort
-		# feature_tables = {
-		# 	'age':self.age_table,
-		# 	'ancestry':self.ancestry_table,
-		# 	'sex':self.sex_table,
-		# 	'mortality':self.mortality_table
-		# }
-		# bit of weird double negative here,
-		# if none of the feature tables exist in the class
-		# we want to send an error, otherswise continue.
-		# alternatively we could:
-		# if any ([k for k in feature tables:]) 
-		# and then call the error at the end of the for loop.
-		if all([not feature for name, feature in self.feature_tables.items()]):
-			raise RuntimeError('No valid cohorts to concatenate found')
-		else:
-			self.all_pids = self.concat_cohort(self.pids)
-			tmp_merge = [self.all_pids]
-			for name, feature in self.feature_tables.items():
-				if feature:
-					if name == 'age':
-						self.all_age = self.concat_cohort(feature)
-						tmp_merge.append(self.all_age)
-					elif name == 'ancestry':
-						self.all_ancestry = self.concat_cohort(feature)
-						tmp_merge.append(self.all_ancestry)
-					elif name == 'sex':
-						self.all_sex = self.concat_cohort(feature)
-						tmp_merge.append(self.all_sex)
-					elif name == 'mortality':
-						self.all_mortality = self.concat_cohort(feature)
-						tmp_merge.append(self.all_mortality)
-					elif name == 'omics_sample_data':
-						self.all_omics_metadata = self.concat_cohort(feature)
+			# 4. see if there are features (age,sex,mortality),
+			# if there are, include them in the merge.
+
+			# feature_tables is a method for tracking what
+			# features we've calculated in the cohort
+			# feature_tables = {
+			# 	'age':self.age_table,
+			# 	'ancestry':self.ancestry_table,
+			# 	'sex':self.sex_table,
+			# 	'mortality':self.mortality_table
+			# }
+			# slightly unusual double negative here,
+			# if none of the feature tables exist in the class
+			# we want to send a warning, otherwise continue.
+			# alternatively we could:
+			# if any ([k for k in feature tables:]) 
+			# and then call the error at the end of the for loop.
+			if all([not feature for name, feature in self.feature_tables.items()]):
+				warnings.warn('Currently no features to concatenate found.')
+			else:
+				# we are concatenating all the potential diagnosis, hpo, icd10, disease terms
+				# as the researcher may want to apply filtering to specific parts of the self.
+				# e.g. filter out participants under age 30 with ICD-10 code A. But keep 
+				# all participants (irrelevant of age) for a particular hpo term. If a participant
+				# is included for the icd-10 code AND the hpo term we don't want to completely
+				# remove the participant_id from self.pids.
+				for name, feature in self.feature_tables.items():
+					if feature:
+						if name == 'age':
+							self.all_age = self.concat_cohort(feature)
+							tmp_merge.append(self.all_age)
+						elif name == 'ancestry':
+							self.all_ancestry = self.concat_cohort(feature)
+							tmp_merge.append(self.all_ancestry)
+						elif name == 'sex':
+							self.all_sex = self.concat_cohort(feature)
+							tmp_merge.append(self.all_sex)
+						elif name == 'mortality':
+							self.all_mortality = self.concat_cohort(feature)
+							tmp_merge.append(self.all_mortality)
+						elif name == 'gmc_registration':
+							self.all_gmc_registration = self.concat_cohort(feature)
+							tmp_merge.append(self.all_gmc_registration)
+
+			# 5. see if there are samples (ca, rd, other),
+			# include them in the merge.
+			if all([not samples for name, samples in self.sample_tables.items()]):
+				warnings.warn('Currently no sample data to concatenate found.')
+			else:
+				for name, samples in self.sample_tables.items():
+					if name == 'omics_sample_data':
+						self.all_omics_metadata = self.concat_cohort(samples)
+						tmp_merge.append(self.all_omics_metadata)
+					elif name == 'cancer_samples':
+						self.all_cancer_samples = self.concat_cohort(samples)
+						tmp_merge.append(self.all_cancer_samples)
+					elif name == 'rare_disease_samples':
+						self.all_rd_samples = self.concat_cohort(samples)
+						tmp_merge.append(self.all_rd_samples)
 						# since the key here are the samples and not the 
 						# participants we shouldn't merge them to all_data.
 						# where the key is diag+participant_id
-					elif name == 'gmc_registration':
-						self.all_gmc_registration = self.concat_cohort(feature)
-
 
 		# determine which of the features are available in the class
 		# then perform stepwise merges for those
@@ -1601,7 +1690,7 @@ class Cohort(object):
 							'participant_id':self.pids['custom']
 							})
 						tmpframe['diag'] = 'custom'
-						self.ont_vcount[key] = (self.tmpframe 
+						self.ont_vcount[key] = (tmpframe 
 							.drop_duplicates([
 								'participant_id',
 								'diag'])

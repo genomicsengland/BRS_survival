@@ -692,8 +692,6 @@ class Survdat(Cohort):
 		self.surv_dat = surv_data
 
 # force list                
-
-
 def query_ctd(
 	df, 
 	version, 
@@ -745,6 +743,128 @@ def query_ctd(
 			False
 			)
 	return df
+
+
+def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
+	"""perform KM survival calculations on one or multiple Cohorts. If a list of
+	Cohorts is given they should be named. If multiple groups are part of the same
+	Cohort they should be assigned a group in Cohort.groups. Finaly, the function
+	can also take in a nested lids of group_pids and associated group_names.
+
+	Args:
+		cohorts (Cohort class): one or multiple Cohorts presented as list.
+		ca_df (pd.Dataframe, optional): A dataframe of GEL cancer data, in particular
+			The dataframe should contain participant ids and disease_types.
+			Defaults to None.
+		group_pids (list, optional):  A nested list of participant_ids, each group 
+			to be compared in its own list. Defaults to None.
+		group_names (list, optional): a list of names for each group. Defaults to None.
+
+
+	Returns:
+		pd.DataFrame: A dataframe indiciating how many participants the survival
+			workflow was unable to find accurate diagnosis dates for.
+		pd.DataFrame: The survival data and groupings used in KM-survival analysis.
+		pd.Dataframe: A mapping of group names.
+	"""
+	from itertools import chain
+	# check if the cohort is one or multiple Cohorts.
+	try:
+		iterator = iter(cohorts)
+	except:
+		mult_cohorts = False
+		# larger than 1, otherwise there would be no comparison possible
+		if len(cohorts.groups) > 1:
+			single_group_pids = list(cohorts.groups.values())
+			len(group_pids)
+			single_group_names = list(cohorts.groups.keys())
+		else:
+			if len(cohorts.groups) == 1:
+				warnings.warn('Only one group found in the Cohort.')
+			if not group_pids:
+				raise ValueError('Please provide lists of participant ids to compare.')
+			if not group_names:
+				raise ValueError('Please provide a corresponding group name for each list of participant ids.')
+			if (len(group_pids) != len(group_names)):
+				raise ValueError('not every group of participant ids has an associated name.')
+
+		all_pids = list(chain(*group_pids))
+		version = cohorts.version
+	else:
+		mult_cohorts=True
+		# if we have multiple cohorts we assume each cohort is compared to the other cohorts.
+		# in which case we don't need group_names, as we already have them.
+		mult_group_pids = [list(x.all_pids) for x in cohorts]
+		mult_group_names = [x.name for x in cohorts]
+		if (len(group_pids) != len(group_names)):
+				raise ValueError('not every cohort has an associated name.')
+
+		all_pids = pd.concat([x.all_pids for x in cohorts])
+		version = cohorts[1].version 
+
+
+	# double check there are no overlapping participants in the groups:
+	# TODO: this only checks if there is an overlap in the first and subsequent groups.
+	overlap = len(set(group_pids[0]).intersection(*group_pids[1:]))
+	if overlap > 0:
+		raise ValueError('Overlap found in groups. ' +
+		'Make sure each group is unique to avoid confounding.')
+
+	if ca_df is None:
+		ca_df = lab_to_df(
+			sql_query=
+				'''
+				SELECT
+					participant_id,
+					disease_type
+				FROM
+					cancer_analysis
+				''',
+			dr=version)	
+
+	simp_cohort = gelpack.survival.Survdat(
+		version=version, 
+		pids=all_pids,
+		df=ca_df,
+		impute=False
+		)
+	simp_cohort.quer_ons()  # get survival data : c.ons
+	simp_cohort.quer_hes()  # query HES data for date of last follow up : c.hes
+	simp_cohort.quer_dod()  # get date of diagnosis :c.dod
+	simp_cohort.merge_dod()  # match date of diagnosis with cohort: c.pid_diag, c.no_diag
+	simp_cohort.surv_time()  # use ons, hes, dod and pid_diag for survival data.
+	simp_cohort.surv_dat
+
+	simp_cohort.group_features = pd.DataFrame({
+		'participant_id':simp_cohort.pids
+		})
+	for x in group_names:
+		simp_cohort.group_features[x] = pd.NA
+	
+	for feat, source in zip(group_names,group_pids):
+		simp_cohort.group_features[feat] = np.where(
+			simp_cohort.group_features['participant_id'].isin(source),
+			True,
+			False
+		)
+	groups,mapping = assign_groups(
+		simp_cohort.group_features,
+		vars=group_names,
+		type='full')
+	map_dict = create_name_map(mapping, group_names)
+	
+	survival_data = pd.merge(groups, simp_cohort.surv_dat, on = 'participant_id', how='left')
+	survival_data.dropna()
+	missing_pgroup = pd.concat([
+		survival_data.loc[survival_data['diagnosis_date'].isna(),'group'].value_counts(),
+		survival_data['group'].value_counts()
+		], axis=1)
+	missing_pgroup.columns = ['missing','all']
+	missing_pgroup['freq'] = missing_pgroup['missing'] / missing_pgroup['all'] 
+	sdat = survival_data.dropna()
+	# TODO add a little boxplot that shows how much NA we have for each group
+	return missing_pgroup, sdat, map_dict
+	#
 
 
 
