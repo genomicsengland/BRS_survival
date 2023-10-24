@@ -877,7 +877,7 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 	return simp_cohort, missing_pgroup, survival_data, map_dict
 
 
-def logrank(data, mapping, mult_test='pair', weightings=None):
+def logrank(data, mapping, mult_test='multivariate', weightings=None):
 	"""Calculate a logrank p-value with the lifelines package. distinguishes between
 	univariate models (2 groups) and multivariate models (<2 groups.)
 
@@ -976,9 +976,9 @@ def km_survival(
 	stats = logrank(
 		data=data,
 		mapping=map_dict,
-		mult_test='pair'
+		mult_test='multivariate'
 		)
-	# print(stats)
+	print(stats)
 
 	for g in strata:
 		s = (df['group'] == g)
