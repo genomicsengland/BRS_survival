@@ -116,7 +116,6 @@ def assign_groups(dataframe, vars, type='and'):
 		dataframe['group'] = dataframe['combination'].factorize()[0]
 		# dataframe.groupby(['snv1','snv2'], sort=False).ngroup()
 		mapping = dataframe[['combination','group']].drop_duplicates()
-		print(mapping)
 		return dataframe, mapping
 	else:
 		raise ValueError(f'Unrecognized type: {type}.')

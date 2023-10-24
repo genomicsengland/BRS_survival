@@ -234,12 +234,13 @@ class Cohort(object):
 		return lab_to_df(sql_query=sqlstr, dr=dr)
 
 
-
+	##### TODO #####
 	# if the cohort has been created on platekeys this function is redundant.
 	# if we are going from participant_id -> platekeys we definitly need to 
 	# make sure we grab only samples of the relevant cancer type.
 	# and remove the rest.
 	def limit_cohort_to_cancer_type(self, pids, dr):
+
 		# filter the cohort to only include participants where we have recruited
 		# the participant for a particular cancer type. (we have the tumour
 		# Sample of the cancer of interest).
@@ -274,6 +275,10 @@ class Cohort(object):
 				plate_key in {*platekeys,}
 			''')
 		return lab_to_df(sql_query=sqlstr, dr=dr)
+
+	### TODO ###
+	def get_platekey_per_pid(cls, pid, dr):
+		sqlstr =()
 
 
 	def get_term_pids(self):
@@ -355,7 +360,7 @@ class Cohort(object):
 		cancer_sql = (f'''
 			SELECT 
 				DISTINCT participant_id,
-				cancer_disease_type
+				cancer_disease_type AS disease_type
 			FROM 
 				cancer_participant_disease
 			WHERE 
@@ -365,8 +370,27 @@ class Cohort(object):
 			sql_query=cancer_sql,
 			dr=self.version
 			)
-		self.cterm_table = cancer_disease
-		self.pids['cterm'] = cancer_disease['participant_id']
+		
+		cancer_analysis_sql =(f'''
+			SELECT
+				DISTINCT participant_id,
+				disease_type
+			FROM
+				cancer_analysis
+			WHERE
+				disease_type IN ({format_ca_types})
+		''')
+
+		cancer_analysis = lab_to_df(
+			sql_query=cancer_analysis_sql,
+			dr=self.version
+			)
+		disease_table = pd.concat(
+			[cancer_disease,cancer_analysis], axis=0
+			).drop_duplicates(keep='first')
+
+		self.cterm_table = disease_table
+		self.pids['cterm'] = disease_table['participant_id']
 
 
 	def get_icd10_pids(self, limit=['all']):
@@ -1102,7 +1126,7 @@ class Cohort(object):
 
 	def ca_sample_data(self):
 		"""query labkey for cancer sample information. Data is retrieved from 
-		cancer analysis (for nsv4 sample statts) and supplemented with dragen 3.2
+		cancer analysis (for nsv4 sample stats) and supplemented with dragen 3.2
 		realigned samples.
 		We make a distinction between cohorts generated from platekeys and
 		cohorts generated from participant_ids / disease terms. As we want to limit
@@ -1139,8 +1163,53 @@ class Cohort(object):
 						ca.preparation_method,
 						ca.tumour_purity,
 						ca.coverage_homogeneity,
-						ca.preparation_method,
 						ca.somatic_coding_variants_per_mb AS tmb,
+						ca.signature_1,
+						ca.signature_2,
+						ca.signature_3,
+						ca.signature_4,
+						ca.signature_5,
+						ca.signature_6,
+						ca.signature_7,
+						ca.signature_8,
+						ca.signature_9,
+						ca.signature_10,
+						ca.signature_11,
+						ca.signature_12,
+						ca.signature_13,
+						ca.signature_14,
+						ca.signature_15,
+						ca.signature_16,
+						ca.signature_17,
+						ca.signature_18,
+						ca.signature_19,
+						ca.signature_20,
+						ca.signature_21,
+						ca.signature_22,
+						ca.signature_23,
+						ca.signature_24,
+						ca.signature_25,
+						ca.signature_26,
+						ca.signature_27,
+						ca.signature_28,
+						ca.signature_29,
+						ca.signature_30,
+						csc.component_tnm_t,
+						csc.component_tnm_n,
+						csc.component_tnm_m,
+						csc.final_figo_stage,
+						csc.stage_best,
+						csc.grade,
+						csc.sact_tumour_pseudo_id,
+						csc.er_status,
+						csc.pr_status,
+						csc.her2_status,
+						csc.npi,
+						csc.gleason_primary,
+						csc.gleason_combined,
+						csc.behaviour_coded_desc,
+						csc.histology_coded_desc,
+						csc.diagnosisdatebest AS diagnosis_date_best,
 						ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
 						da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
 						ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
@@ -1152,6 +1221,10 @@ class Cohort(object):
 						cancer_100K_genomes_realigned_on_pipeline_2 da
 					ON
 						ca.tumour_sample_platekey = da.tumour_sample_platekey
+					LEFT JOIN
+						cancer_staging_consolidated csc
+					ON
+						ca.tumour_sample_platekey = csc.tumour_sample_platekey
 					WHERE
 						ca.tumour_sample_platekey IN {*self.platekeys,}
 					''')
@@ -1182,8 +1255,53 @@ class Cohort(object):
 						ca.preparation_method,
 						ca.tumour_purity,
 						ca.coverage_homogeneity,
-						ca.preparation_method,
 						ca.somatic_coding_variants_per_mb AS tmb,
+						ca.signature_1,
+						ca.signature_2,
+						ca.signature_3,
+						ca.signature_4,
+						ca.signature_5,
+						ca.signature_6,
+						ca.signature_7,
+						ca.signature_8,
+						ca.signature_9,
+						ca.signature_10,
+						ca.signature_11,
+						ca.signature_12,
+						ca.signature_13,
+						ca.signature_14,
+						ca.signature_15,
+						ca.signature_16,
+						ca.signature_17,
+						ca.signature_18,
+						ca.signature_19,
+						ca.signature_20,
+						ca.signature_21,
+						ca.signature_22,
+						ca.signature_23,
+						ca.signature_24,
+						ca.signature_25,
+						ca.signature_26,
+						ca.signature_27,
+						ca.signature_28,
+						ca.signature_29,
+						ca.signature_30,
+						csc.component_tnm_t,
+						csc.component_tnm_n,
+						csc.component_tnm_m,
+						csc.final_figo_stage,
+						csc.stage_best,
+						csc.grade,
+						csc.sact_tumour_pseudo_id,
+						csc.er_status,
+						csc.pr_status,
+						csc.her2_status,
+						csc.npi,
+						csc.gleason_primary,
+						csc.gleason_combined,
+						csc.behaviour_coded_desc,
+						csc.histology_coded_desc,
+						csc.diagnosisdatebest AS diagnosis_date_best,
 						ca.somatic_small_variants_annotation_vcf AS nsv4_somatic_small_variants_annotation_vcf,
 						da.somatic_small_variants_annotation_vcf AS dragen_somatic_small_variants_annotation_vcf,
 						ca.tumour_sv_vcf AS nsv4_somatic_sv_vcf,
@@ -1195,6 +1313,10 @@ class Cohort(object):
 						cancer_100K_genomes_realigned_on_pipeline_2 da
 					ON
 						ca.tumour_sample_platekey = da.tumour_sample_platekey
+					LEFT JOIN
+						cancer_staging_consolidated csc
+					ON
+						ca.tumour_sample_platekey = csc.tumour_sample_platekey
 					WHERE
 						ca.participant_id IN {*pid,}
 					''')
@@ -1480,7 +1602,7 @@ class Cohort(object):
 					if key == 'cterm':
 						conc_tables.append(
 							self.cterm_table.rename(
-								{'cancer_disease_type':'diag'},
+								{'disease_type':'diag'},
 								axis=1)
 								)
 					if key == 'hpo':
@@ -1727,9 +1849,9 @@ class Cohort(object):
 						self.ont_vcount[key] = (self.cterm_table
 							.drop_duplicates([
 								'participant_id', 
-								'cancer_disease_type'
+								'disease_type'
 								])
-							.cancer_disease_type
+							.disease_type
 							.value_counts()
 						)
 					elif key == 'icd10':
@@ -1811,5 +1933,87 @@ class Cohort(object):
 		# refresh trhe all_feature.
 		self.concat_all()
 
-# if we set the sql table strings in a dictionary per version - which is loaded 
-# upon setting the version -> easy to do version control.
+
+	def select_single_ca_sample(self):
+		"""This function attempts to select a single cancer sample from
+		participants with multiple samples. In those cases it first removes
+		samples that are not in cancer_analysis. If there are still remaining
+		samples it will remove non-Primary tumour samples. Finally, if there 
+		are still multiple primary tumour samples it will select one with the 
+		highest tumour_purity, and highest coverage_homogeneity in case of ties.
+		"""
+		self.concat_all()
+		# identify participants with more than 1 sample:
+		subcounts = (self
+			.all_cancer_samples
+			.participant_id
+			.value_counts()
+			.reset_index(name='count')
+			)
+		dups = subcounts.loc[subcounts['count']>1, 'index']
+		to_drop = []
+		for pid in dups:
+			tmp_drop = []
+			samps = (self
+				.all_cancer_samples
+				.loc[self.all_cancer_samples['participant_id'] == pid]
+				)
+
+			# select a platekey, (first remove those not in cancer_analysis.)
+			no_interp = samps.loc[
+					samps['nsv4_somatic_small_variants_annotation_vcf'].isna(),
+					'tumour_sample_platekey'
+					].tolist()
+
+			tmp_drop += no_interp
+			
+			if (len(tmp_drop) < len(samps)-1): # this means we keep non-primary tumours if no other samples are available.
+				# remove non-primary
+				non_primary = samps.loc[samps['tumour_type']!='PRIMARY',
+					'tumour_sample_platekey'].tolist()
+				tmp_drop += non_primary
+
+			if (len(tmp_drop) < len(samps)-1):
+				# then grab highest tumour_purity and coverage_homogeneity.
+				pur_cov_drop = (samps
+					.sort_values([
+						'tumour_purity',
+						'coverage_homogeneity'
+						], 
+						axis=0,
+						ascending=[True,True]) 
+					).tumour_sample_platekey.iloc[:-1].tolist()
+				tmp_drop += pur_cov_drop
+			
+			to_drop += tmp_drop
+
+		# this should leave one platekey per participant_id.
+		# the other platekey should be removed from:
+		# cohort.platekeys:
+		self.platekeys = self.platekeys[~self.platekeys.isin(to_drop)]
+		# cohort.sample_tables()
+		for key,table in self.cancer_samples.items():
+			if key == 'custom':
+				self.cancer_samples['custom'] = table.loc[
+					~table['tumour_sample_platekey'].isin(to_drop)
+					]
+			elif key == 'icd10':
+				self.cancer_samples['icd10'] = table.loc[
+					~table['tumour_sample_platekey'].isin(to_drop)
+					]
+			elif key == 'cterm':
+				self.cancer_samples['cterm'] = table.loc[
+					~table['tumour_sample_platekey'].isin(to_drop)
+					]
+			elif key == 'dterm':
+				self.cancer_samples['dterm'] = table.loc[
+					~table['tumour_sample_platekey'].isin(to_drop)
+					]
+			elif key == 'hpo':
+				self.cancer_samples['hpo'] = table.loc[
+					~table['tumour_sample_platekey'].isin(to_drop)
+					]
+		self.sample_tables['cancer_samples'] = self.cancer_samples
+		# if the sample_tables have been filtered
+		# all_cancer_samples gets reset with concat_all():
+		self.concat_all()		

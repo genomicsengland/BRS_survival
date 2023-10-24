@@ -88,48 +88,18 @@ def argparser():
 	return options
 
 
-
-
-## should this class inherit from the cohort class? or keep them seperate?
-# can you even merge classes? or apply functions to classes that are not defined inside the class?
-# example of brining in a cohort of one class to another.
-# if df == cohort elif df == data.frame.
-# class Participant(object):
-#     def __init__(self, name, level):
-#         self.name = name
-#         self.level = level
-
-# class Team(object):
-#     def __init__(self, name):
-#         self.name = name
-#         self.participants = []
-
-#     def add_participant(self, p):
-#         self.participants.append(p)
-
-# DEMO:
-
-# my_team = Team("Monty Python")
-# p_info = [("Adam", 10e5), ("Joe-bob", -1)]
-# participants = [Participant(name, level) for name, level in p_info]
-
-# for participant in participants:
-#     my_team.add_participant(participant)
-#     # say that 10 times fast....
-
-# In [1]: [p.name for p in my_team.participants]
-# Out[1]: ["Adam", "Joe-bob"]
-
-
 class Survdat(Cohort):
 	
 	def __init__(self, df, pids, version, impute):
 
-
+		self.pids = {}
+		self.platekeys = None
 		self.ca = df
-		self.pids = pids
+		self.pids['custom'] = pids
 		self.version = version
 		self.impute = impute
+		self.feature_tables = {}
+		self.sample_tables = {}
 	 
 
 	def quer_ons(self):
@@ -157,7 +127,7 @@ class Survdat(Cohort):
 				DISTINCT participant_id, death_date
 			FROM
 				death_details
-			WHERE participant_id IN {*self.pids,}
+			WHERE participant_id IN {*self.pids['custom'],}
 			'''
 		)
 		ons1 = lab_to_df(
@@ -169,7 +139,7 @@ class Survdat(Cohort):
 				participant_id, date_of_death
 			FROM 
 				mortality
-			WHERE participant_id IN {*self.pids,}
+			WHERE participant_id IN {*self.pids['custom'],}
 		''')
 		ons2 = lab_to_df(
 			sql_query=query3,
@@ -238,8 +208,10 @@ class Survdat(Cohort):
 			)
 
 		dfs = [apc_lastseen, ae_lastseen, op_lastseen, cc_lastseen]
+		suffix = ('_apc', '_ae', '_op', '_cc')
+		for i,df in enumerate(dfs):
+			df.rename({'LastSeen':'LastSeen'+suffix[i]}, inplace=True, axis=1)
 
-		# merge multiple dataframes to find the last entry in all.
 		merged_lastseen = reduce(
 			lambda left, right: pd.merge(
 				left, right, on=['participant_id'],
@@ -251,7 +223,7 @@ class Survdat(Cohort):
 		for i in [ 'apc', 'ae', 'op', 'cc']:
 			merged_lastseen[i] = pd.to_datetime(merged_lastseen[i])
 		merged_lastseen = merged_lastseen.loc[
-			merged_lastseen['participant_id'].isin(self.pids)
+			merged_lastseen['participant_id'].isin(self.pids['custom'])
 			]
 
 		hes=pd.DataFrame({
@@ -275,7 +247,7 @@ class Survdat(Cohort):
 			FROM
 				cancer_participant_tumour
 			WHERE 
-				participant_id IN {*self.pids,}
+				participant_id IN {*self.pids['custom'],}
 		''')
 		dod_participant = lab_to_df(
 			sql_query=query1,
@@ -299,7 +271,7 @@ class Survdat(Cohort):
 			FROM
 				av_tumour
 			WHERE
-				participant_id IN {*self.pids,}
+				participant_id IN {*self.pids['custom'],}
 		''')
 		av_dod_participant = lab_to_df(
 			sql_query=query2,
@@ -325,11 +297,12 @@ class Survdat(Cohort):
 		# add in cancer registry data here:
 		# Append this based on the data release.
 		query3=(f'''
-		SELECT
-			DISTINCT participant_id, event_date, cancer_site
-		FROM
-			cancer_registry
-		''')
+			SELECT
+				DISTINCT participant_id, event_date, cancer_site
+			FROM
+				cancer_registry
+			WHERE participant_id IN {*self.pids['custom'],}
+			''')
 		nhsd_dod = lab_to_df(
 			sql_query=query3,
 			dr=self.version
@@ -691,6 +664,7 @@ class Survdat(Cohort):
 
 		self.surv_dat = surv_data
 
+
 # force list                
 def query_ctd(
 	df, 
@@ -762,22 +736,30 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 
 
 	Returns:
+		class.Survdat: custom class of diagnosis and survival data per participant.
 		pd.DataFrame: A dataframe indiciating how many participants the survival
 			workflow was unable to find accurate diagnosis dates for.
 		pd.DataFrame: The survival data and groupings used in KM-survival analysis.
 		pd.Dataframe: A mapping of group names.
 	"""
 	from itertools import chain
+	from functools import reduce
+	from gelpack.gel_utils import lab_to_df
+	import numpy as np
+
+	# from gelpack.survival import Survdat
+	# from gelpack.gel_utils import assign_groups
 	# check if the cohort is one or multiple Cohorts.
+	
 	try:
 		iterator = iter(cohorts)
 	except:
 		mult_cohorts = False
 		# larger than 1, otherwise there would be no comparison possible
 		if len(cohorts.groups) > 1:
-			single_group_pids = list(cohorts.groups.values())
+			group_pids = list(cohorts.groups.values())
 			len(group_pids)
-			single_group_names = list(cohorts.groups.keys())
+			group_names = list(cohorts.groups.keys())
 		else:
 			if len(cohorts.groups) == 1:
 				warnings.warn('Only one group found in the Cohort.')
@@ -794,19 +776,30 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 		mult_cohorts=True
 		# if we have multiple cohorts we assume each cohort is compared to the other cohorts.
 		# in which case we don't need group_names, as we already have them.
-		mult_group_pids = [list(x.all_pids) for x in cohorts]
-		mult_group_names = [x.name for x in cohorts]
+		group_pids = [list(x.all_pids) for x in cohorts]
+		group_names = [x.name for x in cohorts]
 		if (len(group_pids) != len(group_names)):
 				raise ValueError('not every cohort has an associated name.')
 
 		all_pids = pd.concat([x.all_pids for x in cohorts])
+		
+		# concat_featdicts(featdict_llist):
+		# 	from functools import reduce
+		# 	for dict in featdict:
+		# 		for df_merged = reduce(lambda left,right: 
+		# 			pd.concat(
+		# 				left, right,
+		# 				axis=1), featdict)
+
 		version = cohorts[1].version 
 
 
 	# double check there are no overlapping participants in the groups:
 	# TODO: this only checks if there is an overlap in the first and subsequent groups.
-	overlap = len(set(group_pids[0]).intersection(*group_pids[1:]))
-	if overlap > 0:
+	overlap = reduce(np.intersect1d, (group_pids))
+	# overlap = len(set(group_pids[0]).intersection(*group_pids[1:]))
+	if len(overlap) > 0:
+		print(overlap)
 		raise ValueError('Overlap found in groups. ' +
 		'Make sure each group is unique to avoid confounding.')
 
@@ -822,21 +815,37 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 				''',
 			dr=version)	
 
-	simp_cohort = gelpack.survival.Survdat(
+	simp_cohort = Survdat(
 		version=version, 
 		pids=all_pids,
 		df=ca_df,
 		impute=False
 		)
+
 	simp_cohort.quer_ons()  # get survival data : c.ons
 	simp_cohort.quer_hes()  # query HES data for date of last follow up : c.hes
 	simp_cohort.quer_dod()  # get date of diagnosis :c.dod
-	simp_cohort.merge_dod()  # match date of diagnosis with cohort: c.pid_diag, c.no_diag
+	simp_cohort.merge_dod() 
 	simp_cohort.surv_time()  # use ons, hes, dod and pid_diag for survival data.
-	simp_cohort.surv_dat
+	
+	simp_cohort.age()
+	simp_cohort.ancestry()
+	simp_cohort.sex()
 
+	# simp_cohort.ca_sample_data()
+	
+	simp_cohort.concat_all()
+
+	
+	# merge the survival data with its features:
+	all_surv = pd.merge(
+		simp_cohort.surv_dat,
+		simp_cohort.all_data,
+		how='left',
+		on='participant_id'
+	)
 	simp_cohort.group_features = pd.DataFrame({
-		'participant_id':simp_cohort.pids
+		'participant_id':simp_cohort.pids['custom']
 		})
 	for x in group_names:
 		simp_cohort.group_features[x] = pd.NA
@@ -847,41 +856,92 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 			True,
 			False
 		)
-	groups,mapping = assign_groups(
+	groups, mapping = assign_groups(
 		simp_cohort.group_features,
 		vars=group_names,
 		type='full')
 	map_dict = create_name_map(mapping, group_names)
 	
-	survival_data = pd.merge(groups, simp_cohort.surv_dat, on = 'participant_id', how='left')
-	survival_data.dropna()
+
+	survival_data = pd.merge(groups, all_surv, on = 'participant_id', how='left')
+	# survival_data.dropna()
 	missing_pgroup = pd.concat([
 		survival_data.loc[survival_data['diagnosis_date'].isna(),'group'].value_counts(),
 		survival_data['group'].value_counts()
 		], axis=1)
 	missing_pgroup.columns = ['missing','all']
 	missing_pgroup['freq'] = missing_pgroup['missing'] / missing_pgroup['all'] 
-	sdat = survival_data.dropna()
+	# sdat = survival_data.dropna()
 	# TODO add a little boxplot that shows how much NA we have for each group
-	return missing_pgroup, sdat, map_dict
-	#
+
+	return simp_cohort, missing_pgroup, survival_data, map_dict
 
 
+def logrank(data, mapping, mult_test='pair', weightings=None):
+	"""Calculate a logrank p-value with the lifelines package. distinguishes between
+	univariate models (2 groups) and multivariate models (<2 groups.)
 
-def kmsurvival(
+	Args:
+		data (pd.DataFrame): pandas dataframe with at least 3 columns: 
+		group, survival, status
+		mapping (dicionary): a dictionary mapping the groups to names, 
+		essential is that the key corresponds to the groups in data
+		mult_test (str, optional): If there are more than 2 groups what type of 
+		statistical test should be applied? options are: 'pair', and 'multivariate'
+		corresponding to lifelines pairwise_logrank_test() and 
+		multivariate_logrank_test(). Defaults to 'pair'.
+		weightings (str, optional): should any weightings be applied?
+		refer to lifelines.. Defaults to None.
+
+	Returns:
+		pd.DataFrame: a dataframe with a p-value an stat data.
+	"""
+	groups=list(mapping.keys())
+	# check if its a single test.
+	if len(groups) == 2:
+		from lifelines.statistics import logrank_test
+		results = logrank_test(
+			durations_A=data.loc[data['group']==groups[0],'survival'].dt.days,
+			durations_B=data.loc[data['group']==groups[1],'survival'].dt.days,
+			event_observed_A=data.loc[data['group']==groups[0],'status'],
+			event_observed_B=data.loc[data['group']==groups[1],'status'],
+			weightings=weightings)
+	elif len(groups) > 2:
+		if mult_test =='pair':
+			from lifelines.statistics import pairwise_logrank_test
+			results = pairwise_logrank_test(
+				event_durations=data['survival'].dt.days,
+				event_observed=data['status'],
+				groups=data['group'],
+				weightings=weightings)
+		elif mult_test =='multivariate':
+			from lifelines.statistics import multivariate_logrank_test
+			results=multivariate_logrank_test(
+				event_durations=data['survival'].dt.days,
+				event_observed=data['status'],
+				groups=data['group'],
+				weightings=weightings
+			)
+	else:
+		raise ValueError('not enough groups to test.')
+	
+	return results
+
+
+def km_survival(
 	data, 
 	strata, 
 	output,  
 	plt_title,
 	map_dict,
-	plotting=True, # should be changed to['show', 'save', 'None'] 
+	plotting='show', 
 	table=True):
 	"""Calculate and plot Kaplan-Meier median survival time using the Lifelines
 	Python package. 
 
 	Args:
 		data (pd.DataFrame): Dataframe with at 3 columns: survival(int), 
-	    	status (1/0 if the event of interest occured), group 
+			status (1/0 if the event of interest occured), group 
 			(some indicator of grouping)
 		strata (list): Which groups to be compared, present in the data
 		output (str): path to output folder.
@@ -889,8 +949,8 @@ def kmsurvival(
 		map_dict (dictionary, optional): Dictionary to rename the groups, reflected
 			in both table and plot output. Note: when included strata should 
 			match the renamed groups.
-		plotting (bool, optional): Should the function output a plot. 
-			Defaults to True.
+		plotting (str, optional): Should the function create a plot: 
+			['show', 'save'], or not: 'None'. Defaults to show.
 		table (bool, optional): should the function save a .csv table. 
 			Defaults to True.
 
@@ -898,9 +958,8 @@ def kmsurvival(
 		pd.DataFrame: a Dataframe with each group a row, size of the group,
 			number of events, median survival time and 95% confidence interval.
 	"""
-	
 	from lifelines import KaplanMeierFitter
-	from lifelines.utils import median_survival_times
+	from lifelines.utils import median_survival_times  # do we use this?
 	from matplotlib import pyplot as plt
 	kmf = KaplanMeierFitter()
 	# ngroup = range(0,len(pd.unique(data['group'])))
@@ -911,8 +970,15 @@ def kmsurvival(
 		plt.title(plt_title)
 	df = data.copy()
 	# this renaming section forces users to rename the strata before the function is run.
-	# a little weird.
+	# perhaps approach differently?
 	df.replace({'group':map_dict}, inplace=True)  
+
+	stats = logrank(
+		data=data,
+		mapping=map_dict,
+		mult_test='pair'
+		)
+	# print(stats)
 
 	for g in strata:
 		s = (df['group'] == g)
@@ -937,15 +1003,26 @@ def kmsurvival(
 		)
 		if plotting is not None:  
 			ax = kmf.plot_survival_function().plot(ax=ax)
+	# add the stats to the plot:
+	fig.text(
+		x=0.55, 
+		y=0.6, 
+		# transform=ax.transAxes,
+		s=(f'''Logrank p-value: {stats.p_value:.4}'''),
+		fontsize=10)
 	if plotting == 'show':
 		plt.show()
 	elif plotting == 'save':
+		if output is None:
+			raise InterruptedError('No output directory given.')
 		# TODO allow differently named save (or use title)
-		plt.savefig(output+'surv.png', bbox_inches='tight', dpi=300)
+		plt.savefig(output+plt_title+'surv.png', bbox_inches='tight', dpi=300)
 		plt.close()
 		plt.clf()
 	outdf = pd.DataFrame(out_d)
 	if table:
+		if output is None:
+			raise InterruptedError('No output directory given.')
 		outdf.to_csv(output+'surv.csv')
 	# note lifelines uses the greenwood formulation for confidence intervals
 	# these can be be larger than the bounds of survival and may differ
@@ -972,7 +1049,143 @@ def kmsurvival(
 	return outdf
 
 
+def coxph_regression(survival_df, time_col, event_col, covariates, formula=None):
+	"""Performs Cox Proportional hazards regression. The script attempts to
+	clean the data by forcing it to integer, one hot encoding strings and 
+	removing highly correlative covariates
 
+	Args:
+		survival_df (pd.DataFrame): A dataframe of survival data, includes the
+		time_col, event_col and covariates.
+		time_col (str): Name of the column corresponding to the time till event 
+		in the survival_df. Can be int or Datetime.
+		event_col (str): Name of the column corresponding to the event-indication
+		can only  an integer (0,1).
+		covariates (list): list of strings with names corresponding to columns in
+		survival_df
+
+	Returns:
+		univariate_df: a pd.DataFrame with outputs of the univariate coxph analysis.
+		CoxPHFitter: a lifelines CoxPHFit associated with the data.
+	"""
+	
+	import numpy as np
+	from lifelines import CoxPHFitter
+	# survival_df=survival_data.copy()
+	# time_col='survival'
+	# event_col='status'
+	# covariates=['sex','group','age_at_consent','predicted_ancestry']
+	survival_df=survival_df[[time_col, event_col] + covariates]
+	
+	# check if covariates in survival_df are of type in, str or bool.
+	trans=[]
+	for cov in covariates:
+		if (survival_df[cov].dtype.kind) not in (['f','i', 'b']):
+			trans.append(cov)
+	if len(trans) > 0:
+		survival_df = pd.get_dummies(
+			data=survival_df,
+			columns=trans,
+			drop_first=False	
+			)
+
+	# make sure the survival column is int
+	if survival_df[time_col].dtype.kind != 'i':
+		try: 
+			survival_df[time_col] = survival_df[time_col].dt.days
+		except:
+			raise AttributeError('Time column is neither an integer nor datetime.')
+
+
+	# import matplotlib.pyplot as plt
+	# import seaborn as sns	
+	# plt.figure()
+	# # TODO output plotslike KM.
+	# dataplot = sns.heatmap(survival_df.corr(), cmap="YlGnBu", annot=True)
+	# plt.show()
+
+	# check correlation, remove variables that are highly corr.
+	corr_matrix = survival_df.corr().abs()
+	# Select upper triangle of correlation matrix
+	upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+	# Find features with correlation greater than 0.95
+	to_drop = [column for column in upper.columns if any(upper[column] > 0.95)]
+	print(f'dropping correlative features: {*to_drop,}')
+	# Drop features 
+	survival_df.drop(to_drop, axis=1, inplace=True)
+
+	cph = CoxPHFitter()
+	import math
+	# run univariate analysis for each covariate:
+	incl_features = []
+	p_values = []
+	hazard_ratios = []
+	hr_upper = []
+	hr_lower = []
+
+	# the one hot encoding above leads to us being unable to just use the
+	# covariates argument..
+	all_covariates = survival_df.drop([event_col,time_col],axis=1).columns.tolist()
+	for cov in all_covariates:
+		cph.fit(
+			survival_df[[event_col,time_col,cov]],
+			duration_col=time_col,
+			event_col=event_col)
+		p_value = cph._compute_p_values()[-1]
+		p_values.append(p_value)
+		# c_index = cph.score(
+		# 	survival_df[[event_col,time_col,cov]],
+		# 	scoring_method="concordance_index"
+		# 	)
+		hazard_ratio = cph.hazard_ratios_.tolist()[-1]
+		hazard_ratios.append(hazard_ratio)
+		hazard_ratios_ci = cph.confidence_intervals_
+		print(f'testing covariante: {cov}')
+		print(f'p_value = {p_value}')
+		print(f'hazard_ratios {hazard_ratio}')
+		
+		if p_value < 0.05:
+			incl_features.append(cov)
+		# if p_value[-1] < 0.1:
+		try:
+			lower = math.exp(hazard_ratios_ci.iloc[-1, 0])
+		except OverflowError:
+			lower = float('inf')
+		hr_lower.append(lower)
+		try:
+			upper = math.exp(hazard_ratios_ci.iloc[-1, 1])
+		except OverflowError:
+			upper = float('inf')
+		hr_upper.append(upper)
+
+	
+	
+	univariate_df = pd.DataFrame(
+		{
+			'covariate':all_covariates,
+			'p_value':p_values,
+			'hazard_ratio':hazard_ratios,
+			'hazard_ratio_upper_95':hr_upper,
+			'hazard_ratio_lower_95':hr_lower
+		}
+		)
+		
+	# now perform multivariate analysis with covariates that are interesting.
+	mult_survival_df= survival_df[[time_col,event_col]+incl_features]
+
+	try:
+		cph.fit(mult_survival_df, duration_col=time_col, event_col=event_col)
+	except:
+		print('###################################################')
+		print('Convergence error, trying again with penalizer=0.01')
+		print('###################################################')
+		cph = CoxPHFitter(penalizer=0.01)
+		cph.fit(mult_survival_df, duration_col=time_col, event_col=event_col)
+
+	# print summary
+	cph.print_summary()  # access the individual results using cph.summary
+
+	return univariate_df, cph
 
 ######################
 # main
@@ -1065,12 +1278,13 @@ if __name__ == '__main__':
 	###
 	# calculate KM survival
 	###
-	dat = kmsurvival(
+	dat = km_survival(
 		data=grouped_dat,
 		strata=map_dict.values(),
 		map_dict=map_dict,
 		output=options.out,
-		plt_title=options.plttitle
+		plt_title=options.plttitle,
+		plotting='save'
 		)
 
 
