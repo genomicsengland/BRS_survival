@@ -929,13 +929,16 @@ def logrank(data, mapping, mult_test='multivariate', weightings=None):
 
 
 def km_survival(
-	data, 
-	strata, 
-	output,  
+	data,
+	strata,
+	output,
 	plt_title,
 	map_dict,
-	plotting='show', 
-	table=True):
+	plotting='show',
+	table=True,
+	interval='days',
+	at_risk_counts=False,
+	weightings=None):
 	"""Calculate and plot Kaplan-Meier median survival time using the Lifelines
 	Python package. 
 
@@ -953,12 +956,20 @@ def km_survival(
 			['show', 'save'], or not: 'None'. Defaults to show.
 		table (bool, optional): should the function save a .csv table. 
 			Defaults to True.
+		interval (str, optional): what time interval should the plot be on?
+			options =['days','months']. Defaults to 'days'.
+		at_risk_counts (bool, optional): to add summary tables. Defaults to False.
+		weightings (str, optional): Should the logrank p-value be calculated, or
+			alternative tests be used? options are “wilcoxon” for Wilcoxon
+			(also known as Breslow), “tarone-ware” for Tarone-Ware,
+			“peto” for Peto test. Defaults to logrank test.
 
 	Returns:
 		pd.DataFrame: a Dataframe with each group a row, size of the group,
 			number of events, median survival time and 95% confidence interval.
 	"""
 	from lifelines import KaplanMeierFitter
+	from lifelines.plotting import add_at_risk_counts
 	from lifelines.utils import median_survival_times  # do we use this?
 	from matplotlib import pyplot as plt
 	kmf = KaplanMeierFitter()
@@ -976,17 +987,25 @@ def km_survival(
 	stats = logrank(
 		data=data,
 		mapping=map_dict,
-		mult_test='multivariate'
+		mult_test='multivariate',
+		weightings=weightings
 		)
 	print(stats)
 
 	for g in strata:
 		s = (df['group'] == g)
-		fit = kmf.fit(
-			df['survival'].dt.days[s],
-			df['status'][s],
-			label=g
-			)
+		if interval =='days':
+			fit = kmf.fit(
+				df['survival'].dt.days[s],
+				df['status'][s],
+				label=g
+				)
+		elif interval == 'months':
+			fit = kmf.fit(
+				df['survival'][s]/np.timedelta64(1, 'M'),
+				df['status'][s],
+				label=g
+				)
 		out_d.append(
 			{
 				'group' : g,
@@ -1004,12 +1023,20 @@ def km_survival(
 		if plotting is not None:  
 			ax = kmf.plot_survival_function().plot(ax=ax)
 	# add the stats to the plot:
-	fig.text(
-		x=0.55, 
-		y=0.6, 
-		# transform=ax.transAxes,
-		s=(f'''Logrank p-value: {stats.p_value:.4}'''),
-		fontsize=10)
+	if plotting is not None:
+		# if at_risk_counts:
+		# 	add_at_risk_counts(*aggfit,ax=ax)
+		if weightings == None:
+			test='Logrank'
+		else: 
+			test = weightings
+		fig.text(
+			x=0.55, 
+			y=0.6, 
+			# transform=ax.transAxes,
+			s=(f'''{test} p-value: {stats.p_value:.4}'''),
+			fontsize=10)
+		plt.xlabel(f'time ({interval})')
 	if plotting == 'show':
 		plt.show()
 	elif plotting == 'save':
@@ -1019,6 +1046,7 @@ def km_survival(
 		plt.savefig(output+plt_title+'surv.png', bbox_inches='tight', dpi=300)
 		plt.close()
 		plt.clf()
+	
 	outdf = pd.DataFrame(out_d)
 	if table:
 		if output is None:
@@ -1048,6 +1076,90 @@ def km_survival(
 	# 	return kmf.plot_survival_function(), outdf
 	return outdf
 
+
+def stepwise_coxph_regression(survival_df, time_col, event_col, to_test_cov):
+	# check if covariates in survival_df are of type in, str or bool.
+	trans=[]
+	for cov in to_test_cov:
+		if (survival_df[cov].dtype.kind) not in (['f','i', 'b']):
+			trans.append(cov)
+	if len(trans) > 0:
+		survival_df = pd.get_dummies(
+			data=survival_df,
+			columns=trans,
+			drop_first=False	
+			)
+	
+	# make sure the survival column is int
+	if survival_df[time_col].dtype.kind != 'i':
+		try: 
+			survival_df[time_col] = survival_df[time_col].dt.days
+		except:
+			raise AttributeError('Time column is neither an integer nor datetime.')
+	import math
+	# run univariate analysis for each covariate:
+	incl_features = []
+	p_values = []
+	hazard_ratios = []
+	hr_upper = []
+	hr_lower = []
+
+	# the one hot encoding above leads to us being unable to just use the
+	# covariates argument  ..
+	all_covariates = survival_df.drop([event_col,time_col],axis=1).columns.tolist()
+	# perform the regression analysis with the first covariate.
+	# then add covaria
+	use_cov = []
+	tmp_cov = all_covariates[0]
+	# run the model with the first covariate, 
+	# if its p<0.05: add it to use_cov and run the next use_cov+temp_cov.
+	# how do we measure model improvement?
+
+
+	# if the model improves again, add it to use_cov.
+	for cov in all_covariates[1:]:
+		cph.fit(
+			survival_df[[event_col,time_col,cov]],
+			duration_col=time_col,
+			event_col=event_col)
+		p_value = cph._compute_p_values()[-1]
+		p_values.append(p_value)
+		# c_index = cph.score(
+		# 	survival_df[[event_col,time_col,cov]],
+		# 	scoring_method="concordance_index"
+		# 	)
+		hazard_ratio = cph.hazard_ratios_.tolist()[-1]
+		hazard_ratios.append(hazard_ratio)
+		hazard_ratios_ci = cph.confidence_intervals_
+		print(f'testing covariante: {cov}')
+		print(f'p_value = {p_value}')
+		print(f'hazard_ratios {hazard_ratio}')
+		
+		if p_value < 0.05:
+			incl_features.append(cov)
+		# if p_value[-1] < 0.1:
+		try:
+			lower = math.exp(hazard_ratios_ci.iloc[-1, 0])
+		except OverflowError:
+			lower = float('inf')
+		hr_lower.append(lower)
+		try:
+			upper = math.exp(hazard_ratios_ci.iloc[-1, 1])
+		except OverflowError:
+			upper = float('inf')
+		hr_upper.append(upper)
+
+	
+	
+	univariate_df = pd.DataFrame(
+		{
+			'covariate':all_covariates,
+			'p_value':p_values,
+			'hazard_ratio':hazard_ratios,
+			'hazard_ratio_upper_95':hr_upper,
+			'hazard_ratio_lower_95':hr_lower
+		}
+		)
 
 def coxph_regression(survival_df, time_col, event_col, covariates, formula=None):
 	"""Performs Cox Proportional hazards regression. The script attempts to

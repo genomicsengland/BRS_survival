@@ -43,7 +43,10 @@ def lab_to_df(sql_query, dr):
 			contextPath, 
 			use_ssl=True)
 		
-		results = api.query.execute_sql(sql=sql_query, schema_name=schema)
+		results = api.query.execute_sql(
+			sql=sql_query, 
+			schema_name=schema,
+			max_rows=50000000)
 	
 	return(pd.DataFrame(results['rows']))
 
@@ -227,3 +230,23 @@ def translateicd(icd_vec, lookup=None):
 	# remove trailing 'X' and any '.'
 	icd_vec_clean = [re.sub('X$|\[.\]|[.]' , '', str(x)) for x in icd_vec]
 	return list(map(transicd, icd_vec_clean))
+
+
+
+def tnm_to_stage(t,n,m):
+	if m.str.contains('1'):
+		stage = 4
+	elif n.str.contains(['1','2','3']):
+		stage = 3
+	elif t.str.contains(['3','4']):
+		stage = 2
+	elif (
+		t.str.contains(['1','2',])
+		| t =='Ta'
+		| t == 'a'
+		):
+		stage = 1
+	else:
+		stage = 0
+
+	return stage

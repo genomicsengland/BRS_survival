@@ -276,6 +276,7 @@ class Cohort(object):
 			''')
 		return lab_to_df(sql_query=sqlstr, dr=dr)
 
+
 	### TODO ###
 	def get_platekey_per_pid(cls, pid, dr):
 		sqlstr =()
@@ -409,6 +410,8 @@ class Cohort(object):
 			- mhsds_secondary_diagnosis
 			- mhsds_care_activity
 			- mhsds_indirect_activity
+			- mhmd_v4_event
+			- mhldds_event
 		cancer:
 			- cancer_invest_sample_pathology
 			- cancer_participant_tumour
