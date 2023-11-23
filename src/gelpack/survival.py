@@ -652,9 +652,9 @@ class Survdat(Cohort):
 			surv_dat['last_date'] - surv_dat['diagnosis_date']
 			)
 		# filter out those with a last date before the diagnosis date.
-		surv_dat = surv_dat.loc[
-			~(surv_dat['survival'].dt.days <= 0)
-			& ~(surv_dat['survival'].isna())]
+		# surv_dat = surv_dat.loc[
+		# 	~(surv_dat['survival'].dt.days <= 0)
+		# 	& ~(surv_dat['survival'].isna())]
 
 		surv_dat = surv_dat.drop_duplicates([
 			'participant_id', 
@@ -665,6 +665,7 @@ class Survdat(Cohort):
 			'participant_id',
 			'disease_type',
 			'diagnosis_date',
+			'date_of_death',
 			'last_date',
 			'survival',
 			'status']]
