@@ -147,8 +147,15 @@ class Survdat(Cohort):
 
 		ons1.rename(columns={'death_date':'date_of_death'}, inplace=True)
 		ons = ons1.merge(ons2, how='outer')
-		ons.sort_values(by='date_of_death', ascending=True, inplace=True)
-		ons.drop_duplicates(subset='participant_id', keep='first', inplace=True)
+		ons.sort_values(
+			by='date_of_death',
+			ascending=True, 
+			inplace=True,
+			na_position='last')
+		ons.drop_duplicates(
+			subset='participant_id', 
+			keep='first', 
+			inplace=True)
 
 		self.ons = ons
 
@@ -168,9 +175,9 @@ class Survdat(Cohort):
 		# determine date of last follow up (last time seem)
 		###
 		hes_tables=[
-			('apc','disdate'),
-			('ae','arrivaldate'),
-			('op','apptdate'),
+			('apc','epistart'),
+			('ae','arrivaldate'), 
+			('op','apptdate'), 
 			('cc','ccdisdate')
 			]
 		# WHERE x.participant_id IN {*self.pids,}
@@ -990,18 +997,19 @@ def km_survival(
 		mult_test='multivariate',
 		weightings=weightings
 		)
-	print(stats)
-
+	# print(stats)
+	aggfit = {}
 	for g in strata:
+		aggfit[g]=KaplanMeierFitter()
 		s = (df['group'] == g)
 		if interval =='days':
-			fit = kmf.fit(
+			aggfit[g].fit(
 				df['survival'].dt.days[s],
 				df['status'][s],
 				label=g
 				)
 		elif interval == 'months':
-			fit = kmf.fit(
+			aggfit[g].fit(
 				df['survival'][s]/np.timedelta64(1, 'M'),
 				df['status'][s],
 				label=g
@@ -1009,35 +1017,39 @@ def km_survival(
 		out_d.append(
 			{
 				'group' : g,
-				'n' : fit.event_observed.size,
+				'n' : aggfit[g].event_observed.size,
 				'events' : sum(df['status'][s]),
-				'median' : fit.median_survival_time_,
+				'median' : aggfit[g].median_survival_time_,
 				'upper_ci' : median_survival_times(
-					fit.confidence_interval_
+					aggfit[g].confidence_interval_
 					).iloc[:,1].item(),
 				'lower_ci' : median_survival_times(
-					fit.confidence_interval_
+					aggfit[g].confidence_interval_
 					).iloc[:,0].item()
 			}
 		)
+		# aggfit[g]=fit
 		if plotting is not None:  
-			ax = kmf.plot_survival_function().plot(ax=ax)
+			aggfit[g].plot_survival_function().plot(ax=ax)
 	# add the stats to the plot:
 	if plotting is not None:
-		# if at_risk_counts:
-		# 	add_at_risk_counts(*aggfit,ax=ax)
+		if at_risk_counts:
+			add_at_risk_counts(*list(aggfit.values()),ax=ax)
 		if weightings == None:
 			test='Logrank'
 		else: 
 			test = weightings
-		fig.text(
-			x=0.55, 
-			y=0.6, 
+		plt.text(
+			x=0.8, 
+			y=0.8, 
 			# transform=ax.transAxes,
 			s=(f'''{test} p-value: {stats.p_value:.4}'''),
-			fontsize=10)
-		plt.xlabel(f'time ({interval})')
+			fontsize=10,
+			ha='right', va='top', 
+			transform=ax.transAxes)
+		ax.set_xlabel(f'time ({interval})')
 	if plotting == 'show':
+		plt.tight_layout()
 		plt.show()
 	elif plotting == 'save':
 		if output is None:

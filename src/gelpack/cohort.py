@@ -1032,20 +1032,40 @@ class Cohort(object):
 			ons2 = lab_to_df(
 				sql_query=query3,
 				dr=self.version)
-
+			
+			query4 = (
+				f'''
+				SELECT
+					participant_id, date_of_death
+				FROM
+					rare_disease_pedigree_member
+				WHERE
+					participant_id IN {*pid,}
+			''')
+			rd_ons = lab_to_df(
+				sql_query=query4,
+				dr=self.version
+				)
 			ons1.rename(columns={'death_date':'date_of_death'}, inplace=True)
 			# cohorts may have every / most participants alive
 			# if one of the two tables is empty the merge will fail, hence:
-			check_size = [ons1.size > 0, ons2.size > 0]
+			check_size = [ons1.size > 0, ons2.size > 0, rd_ons.size>0]
 			if sum(check_size) == 0:  # no data in tables
 				warnings.warn("No participants found in mortality tables.")
-			elif sum(check_size) == 2: # both tables have data
-				ons = (ons1.merge(
+			elif sum(check_size) == 3: # both tables have data
+				ons_tmp = ons1.merge(
 						ons2, 
-						how='outer')
+						how='outer'
+						)
+				ons_tmp = ons_tmp.merge(
+					rd_ons,
+					how='outer'
+					)
+				ons= (ons_tmp
 					.sort_values(
 						by='date_of_death', 
-						ascending=True)
+						ascending=True,
+						na_position='last')
 					.drop_duplicates(
 						subset='participant_id', 
 						keep='first')
@@ -1056,8 +1076,31 @@ class Cohort(object):
 
 				self.mortality_table[key] = tmp_mort
 				self.feature_tables['mortality'] = self.mortality_table
+			elif sum(check_size) == 2:  # only one of the two lists has got data.
+				res = [[ons1, ons2, rd_ons][i] for i, val in enumerate(check_size) if val]
+				res_merge = reduce(lambda  left,right: pd.merge(left,right,on=['DATE'],
+                                            how='outer'), res)
+				res_merge_clean = (res_merge
+					.sort_values(
+						by='date_of_death', 
+						ascending=True,
+						na_position='last')
+					.drop_duplicates(
+						subset='participant_id', 
+						keep='first')
+					)
+				tmp_mort = pd.merge(
+					pid, 
+					res_merge_clean[0], 
+					on='participant_id', 
+					how='left')
+				tmp_mort['status'] = np.where(
+					tmp_mort['date_of_death'].isna(), 'Alive', 'Deceased')
+				self.mortality_table[key] = tmp_mort 
+				self.feature_tables['mortality'] = self.mortality_table
+			
 			elif sum(check_size) == 1:  # only one of the two lists has got data.
-				res = [[ons1, ons2][i] for i, val in enumerate(check_size) if val]
+				res = [[ons1, ons2, rd_ons][i] for i, val in enumerate(check_size) if val]
 				tmp_mort = pd.merge(pid, res[0], on='participant_id', how='left')
 				tmp_mort['status'] = np.where(
 					tmp_mort['date_of_death'].isna(), 'Alive', 'Deceased')
