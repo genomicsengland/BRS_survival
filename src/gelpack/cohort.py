@@ -12,6 +12,7 @@ import numpy as np
 import warnings
 import labkey
 from gelpack.gel_utils import lab_to_df
+from functools import reduce
 
 
 class Cohort(object):
@@ -1038,7 +1039,7 @@ class Cohort(object):
 				SELECT
 					participant_id, date_of_death
 				FROM
-					rare_disease_pedigree_member
+					rare_diseases_pedigree_member
 				WHERE
 					participant_id IN {*pid,}
 			''')
@@ -1046,6 +1047,7 @@ class Cohort(object):
 				sql_query=query4,
 				dr=self.version
 				)
+			rd_ons = rd_ons.dropna()
 			ons1.rename(columns={'death_date':'date_of_death'}, inplace=True)
 			# cohorts may have every / most participants alive
 			# if one of the two tables is empty the merge will fail, hence:
@@ -1078,7 +1080,7 @@ class Cohort(object):
 				self.feature_tables['mortality'] = self.mortality_table
 			elif sum(check_size) == 2:  # only one of the two lists has got data.
 				res = [[ons1, ons2, rd_ons][i] for i, val in enumerate(check_size) if val]
-				res_merge = reduce(lambda  left,right: pd.merge(left,right,on=['DATE'],
+				res_merge = reduce(lambda  left,right: pd.merge(left,right,on=['date_of_death'],
                                             how='outer'), res)
 				res_merge_clean = (res_merge
 					.sort_values(

@@ -884,6 +884,245 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 
 	return simp_cohort, missing_pgroup, survival_data, map_dict
 
+def add_at_risk_counts(
+    *fitters,
+    labels= None,
+    rows_to_show=None,
+    ypos=-0.6,
+    xticks=None,
+    ax=None,
+    at_risk_count_from_start_of_period=False,
+    mask=False,
+    **kwargs,
+	):
+    """
+	--- Fork from Lifelines ---
+    Add counts showing how many individuals were at risk, censored, and observed, at each time point in
+    survival/hazard plots.
+
+    Tip: you probably want to call ``plt.tight_layout()`` afterwards.
+
+    Parameters
+    ----------
+    fitters:
+      One or several fitters, for example KaplanMeierFitter, WeibullFitter,
+      NelsonAalenFitter, etc...
+    labels:
+        provide labels for the fitters, default is to use the provided fitter label. Set to
+        False for no labels.
+    rows_to_show: list
+        a sub-list of ['At risk', 'Censored', 'Events']. Default to show all.
+    ypos:
+        make more positive to move the table up.
+    xticks: list
+        specify the time periods (as a list) you want to evaluate the counts at.
+    at_risk_count_from_start_of_period: bool, default False.
+        By default, we use the at-risk count from the end of the period. This is what other packages, and KMunicate suggests, but
+        the same issue keeps coming up with users. #1383, #1316 and discussion #1229. This makes the adjustment.
+    ax:
+        a matplotlib axes
+    mask:
+        mask counts lower than 5 with '<5'
+
+    Returns
+    --------
+      ax:
+        The axes which was used.
+
+    Examples
+    --------
+    .. code:: python
+
+        # First train some fitters and plot them
+        fig = plt.figure()
+        ax = plt.subplot(111)
+
+        f1 = KaplanMeierFitter()
+        f1.fit(data)
+        f1.plot(ax=ax)
+
+        f2 = KaplanMeierFitter()
+        f2.fit(data)
+        f2.plot(ax=ax)
+
+        # These calls below are equivalent
+        add_at_risk_counts(f1, f2)
+        add_at_risk_counts(f1, f2, ax=ax, fig=fig)
+        plt.tight_layout()
+
+        # This overrides the labels
+        add_at_risk_counts(f1, f2, labels=['fitter one', 'fitter two'])
+        plt.tight_layout()
+
+        # This hides the labels
+        add_at_risk_counts(f1, f2, labels=False)
+        plt.tight_layout()
+
+        # Only show at-risk:
+        add_at_risk_counts(f1, f2, rows_to_show=['At risk'])
+        plt.tight_layout()
+
+    References
+    -----------
+     Morris TP, Jarvis CI, Cragg W, et al. Proposals on Kaplan–Meier plots in medical research and a survey of stakeholder views: KMunicate. BMJ Open 2019;9:e030215. doi:10.1136/bmjopen-2019-030215
+
+    """
+    
+    from matplotlib import pyplot as plt
+    from lifelines.plotting import move_spines, remove_spines, remove_ticks, is_latex_enabled
+    if ax is None:
+        ax = plt.gca()
+    fig = kwargs.pop("fig", None)
+    if fig is None:
+        fig = plt.gcf()
+    if labels is None:
+        labels = [f._label for f in fitters]
+    elif labels is False:
+        labels = [None] * len(fitters)
+    if rows_to_show is None:
+        rows_to_show = ["At risk", "Censored", "Events"]
+    else:
+        assert all(
+            row in ["At risk", "Censored", "Events"] for row in rows_to_show
+        ), 'must be one of ["At risk", "Censored", "Events"]'
+    n_rows = len(rows_to_show)
+
+    # Create another axes where we can put size ticks
+    ax2 = plt.twiny(ax=ax)
+    # Move the ticks below existing axes
+    # Appropriate length scaled for 6 inches. Adjust for figure size.
+    ax_height = (
+        ax.get_position().y1 - ax.get_position().y0
+    ) * fig.get_figheight()  # axis height
+    ax2_ypos = ypos / ax_height
+
+    move_spines(ax2, ["bottom"], [ax2_ypos])
+    # Hide all fluff
+    remove_spines(ax2, ["top", "right", "bottom", "left"])
+    # Set ticks and labels on bottom
+    ax2.xaxis.tick_bottom()
+    # Set limit
+    min_time, max_time = ax.get_xlim()
+    ax2.set_xlim(min_time, max_time)
+    # Set ticks to kwarg or visible ticks
+    if xticks is None:
+        xticks = [xtick for xtick in ax.get_xticks() if min_time <= xtick <= max_time]
+    ax2.set_xticks(xticks)
+    # Remove ticks, need to do this AFTER moving the ticks
+    remove_ticks(ax2, x=True, y=True)
+    
+    ticklabels = []
+
+    for tick in ax2.get_xticks():
+        lbl = ""
+
+        # Get counts at tick
+        counts = []
+        
+        for f in fitters:
+            # this is a messy:
+            # a) to align with R (and intuition), we do a subtraction off the at_risk column
+            # b) we group by the tick intervals
+            # c) we want to start at 0, so we give it it's own interval
+            if at_risk_count_from_start_of_period:
+                event_table_slice = f.event_table.assign(at_risk=lambda x: x.at_risk)
+            else:
+                event_table_slice = f.event_table.assign(
+                    at_risk=lambda x: x.at_risk - x.removed
+                )
+            if not event_table_slice.loc[:tick].empty:
+                event_table_slice = (
+                    event_table_slice.loc[:tick, ["at_risk", "censored", "observed"]]
+                    .agg(
+                        {
+                            "at_risk": lambda x: x.tail(1).values,
+                            "censored": "sum",
+                            "observed": "sum",
+                        }
+                    )  # see #1385
+                    .rename(
+                        {
+                            "at_risk": "At risk",
+                            "censored": "Censored",
+                            "observed": "Events",
+                        }
+                    )
+                    .fillna(0)
+                )
+                
+                counts.extend([int(c) for c in event_table_slice.loc[rows_to_show]])
+            else:
+                counts.extend([0 for _ in range(n_rows)])
+        if n_rows > 1:
+            if tick == ax2.get_xticks()[0]:
+                max_length = len(str(max(counts)))
+                for i, c in enumerate(counts):
+                    if i % n_rows == 0:
+                        if is_latex_enabled():
+                            lbl += (
+                                ("\n" if i > 0 else "")
+                                + r"\textbf{%s}" % labels[int(i / n_rows)]
+                                + "\n"
+                            )
+                        else:
+                            lbl += (
+                                ("\n" if i > 0 else "")
+                                + r"%s" % labels[int(i / n_rows)]
+                                + "\n"
+                            )
+                    l = rows_to_show[i % n_rows]
+                    s = (
+                        "{}".format(l.rjust(10, " "))
+                        + (" " * (max_length - len(str(c)) + 3))
+                        + "{:>{}}\n".format(
+                            str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
+                    )
+                    lbl += s.format(c)
+            else:
+                # Create tick label
+                lbl += ""
+                for i, c in enumerate(counts):
+                    if i % n_rows == 0 and i > 0:
+                        lbl += "\n\n"
+                    s = "\n{}"
+                    if not mask:
+                        lbl += s.format(c)
+                    else:
+                        lbl +=s.format(c if c >= 5 or c==0 else '<5')
+        else:
+            # if only one row to show, show in "condensed" version
+            if tick == ax2.get_xticks()[0]:
+                max_length = len(str(max(counts)))
+
+                lbl += rows_to_show[0] + "\n"
+
+                for i, c in enumerate(counts):
+                    s = (
+                        "{}".format(labels[i].rjust(10, " "))
+                        + (" " * (max_length - len(str(c)) + 3))
+                        + "{:>{}}\n".format(
+                            str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
+                    )
+                    lbl += s
+
+                    # if not mask:
+                    #     lbl += s.format(c)
+                    # else:
+                    #     lbl +=s.format(c if c >= 5 else '<5')
+            else:
+                # Create tick label
+                lbl += ""
+                for i, c in enumerate(counts):
+                    s = "\n{}"
+                    if not mask:
+                        lbl += s.format(c)
+                    else:
+                        lbl +=s.format(c if c >= 5 or c==0 else '<5')
+        ticklabels.append(lbl)
+    # Align labels to the right so numbers can be compared easily
+    ax2.set_xticklabels(ticklabels, ha="right", **kwargs)
+
+    return ax
 
 def logrank(data, mapping, mult_test='multivariate', weightings=None):
 	"""Calculate a logrank p-value with the lifelines package. distinguishes between
@@ -942,11 +1181,13 @@ def km_survival(
 	output,
 	plt_title,
 	map_dict,
+	col=None,
 	plotting='show',
 	table=True,
 	interval='days',
 	at_risk_counts=False,
-	weightings=None):
+	weightings=None,
+	mask=True):
 	"""Calculate and plot Kaplan-Meier median survival time using the Lifelines
 	Python package. 
 
@@ -955,13 +1196,13 @@ def km_survival(
 			status (1/0 if the event of interest occured), group 
 			(some indicator of grouping)
 		strata (list): Which groups to be compared, present in the data
-		output (str): path to output folder.
+		output (str): path to save output as.
 		plt_title (str): Title of kaplain-meier plot.
 		map_dict (dictionary, optional): Dictionary to rename the groups, reflected
 			in both table and plot output. Note: when included strata should 
 			match the renamed groups.
 		plotting (str, optional): Should the function create a plot: 
-			['show', 'save'], or not: 'None'. Defaults to show.
+			['show', 'save'], or return the ax: 'None'. Defaults to show.
 		table (bool, optional): should the function save a .csv table. 
 			Defaults to True.
 		interval (str, optional): what time interval should the plot be on?
@@ -977,9 +1218,11 @@ def km_survival(
 			number of events, median survival time and 95% confidence interval.
 	"""
 	from lifelines import KaplanMeierFitter
-	from lifelines.plotting import add_at_risk_counts
+	from gelpack.survival import add_at_risk_counts
+	# from lifelines.plotting import add_at_risk_counts point towards fork.
 	from lifelines.utils import median_survival_times  # do we use this?
 	from matplotlib import pyplot as plt
+	
 	kmf = KaplanMeierFitter()
 	# ngroup = range(0,len(pd.unique(data['group'])))
 	out_d = []
@@ -1030,25 +1273,33 @@ def km_survival(
 			}
 		)
 		# aggfit[g]=fit
-		if plotting is not None:  
-			aggfit[g].plot_survival_function().plot(ax=ax)
+		if plotting is not None: 
+			if col is not None: 
+				aggfit[g].plot_survival_function(color=col[g]).plot(ax=ax)
+			else:
+				aggfit[g].plot_survival_function().plot(ax=ax)
 	# add the stats to the plot:
 	if plotting is not None:
 		if at_risk_counts:
-			add_at_risk_counts(*list(aggfit.values()),ax=ax)
+			add_at_risk_counts(
+				*list(aggfit.values()),
+				ax=ax, 
+				mask=mask,
+				rows_to_show=['At risk', 'Censored'])
 		if weightings == None:
 			test='Logrank'
 		else: 
 			test = weightings
+		
 		plt.text(
 			x=0.8, 
 			y=0.8, 
 			# transform=ax.transAxes,
 			s=(f'''{test} p-value: {stats.p_value:.4}'''),
 			fontsize=10,
-			ha='right', va='top', 
-			transform=ax.transAxes)
+			ha='right', va='top', transform=ax.transAxes)
 		ax.set_xlabel(f'time ({interval})')
+
 	if plotting == 'show':
 		plt.tight_layout()
 		plt.show()
@@ -1056,15 +1307,17 @@ def km_survival(
 		if output is None:
 			raise InterruptedError('No output directory given.')
 		# TODO allow differently named save (or use title)
-		plt.savefig(output+plt_title+'surv.png', bbox_inches='tight', dpi=300)
+		plt.savefig(output+'_kmplot.png', bbox_inches='tight', dpi=300)
 		plt.close()
 		plt.clf()
+	else:
+		return stats,aggfit
 	
 	outdf = pd.DataFrame(out_d)
 	if table:
 		if output is None:
 			raise InterruptedError('No output directory given.')
-		outdf.to_csv(output+'surv.csv')
+		outdf.to_csv(output+'_surv_table.csv')
 	# note lifelines uses the greenwood formulation for confidence intervals
 	# these can be be larger than the bounds of survival and may differ
 	# from the confidence intervals calculated by the R survival package.

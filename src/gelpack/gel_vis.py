@@ -37,7 +37,7 @@ def simple_count_plt(
 			table_count = (table[x]
 				.value_counts(normalize=True)
 				.reset_index(drop=False, name='count')
-				.rename({'index':'sex'},axis=1))
+				.rename({'index':x},axis=1))
 			scale_threshold = 5/len(table)
 		else:
 			table_count = (table
@@ -343,7 +343,6 @@ def vis_cohorts(
 	axs2.set_ylabel(None)
 	axs2.set_xlabel('Sex')
 
-	
 
 	### ancestry ###
 	if mult_cohorts:
