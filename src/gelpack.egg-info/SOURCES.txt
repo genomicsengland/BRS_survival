@@ -8,6 +8,7 @@ src/gelpack/cohort.py
 src/gelpack/gel_utils.py
 src/gelpack/gel_vis.py
 src/gelpack/survival.py
+src/gelpack/workflows.py
 src/gelpack.egg-info/PKG-INFO
 src/gelpack.egg-info/SOURCES.txt
 src/gelpack.egg-info/dependency_links.txt
