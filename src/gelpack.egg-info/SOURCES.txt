@@ -3,6 +3,7 @@ MANIFEST.in
 README.md
 pyproject.toml
 src/gelpack/__init__.py
+src/gelpack/add_at_risk_counts.py
 src/gelpack/coding19.tsv
 src/gelpack/cohort.py
 src/gelpack/gel_utils.py
