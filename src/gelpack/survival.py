@@ -652,9 +652,9 @@ class Survdat(Cohort):
 			surv_dat['last_date'] - surv_dat['diagnosis_date']
 			)
 		# filter out those with a last date before the diagnosis date.
-		# surv_dat = surv_dat.loc[
-		# 	~(surv_dat['survival'].dt.days <= 0)
-		# 	& ~(surv_dat['survival'].isna())]
+		surv_dat = surv_dat.loc[
+			~(surv_dat['survival'].dt.days <= 0)
+			& ~(surv_dat['survival'].isna())]
 
 		surv_dat = surv_dat.drop_duplicates([
 			'participant_id', 
@@ -688,7 +688,7 @@ def query_ctd(
 		clinsig (list): list of clinical significance to include. default:
 		'(likely)pathogenic','LoF','path_LoF', excluding 'other'
 	"""
-	from . import force_list
+	from gelpack.gel_utils import force_list
 	genes_list = force_list(genes)
 
 	if len(genes_list) > 1:

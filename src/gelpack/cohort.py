@@ -1054,7 +1054,7 @@ class Cohort(object):
 			check_size = [ons1.size > 0, ons2.size > 0, rd_ons.size>0]
 			if sum(check_size) == 0:  # no data in tables
 				warnings.warn("No participants found in mortality tables.")
-			elif sum(check_size) == 3: # both tables have data
+			elif sum(check_size) == 3: # all tables have data
 				ons_tmp = ons1.merge(
 						ons2, 
 						how='outer'
@@ -1080,8 +1080,8 @@ class Cohort(object):
 				self.feature_tables['mortality'] = self.mortality_table
 			elif sum(check_size) == 2:  # only one of the two lists has got data.
 				res = [[ons1, ons2, rd_ons][i] for i, val in enumerate(check_size) if val]
-				res_merge = reduce(lambda  left,right: pd.merge(left,right,on=['date_of_death'],
-                                            how='outer'), res)
+				res_merge = pd.concat(res)
+				
 				res_merge_clean = (res_merge
 					.sort_values(
 						by='date_of_death', 
@@ -1093,7 +1093,7 @@ class Cohort(object):
 					)
 				tmp_mort = pd.merge(
 					pid, 
-					res_merge_clean[0], 
+					res_merge_clean, 
 					on='participant_id', 
 					how='left')
 				tmp_mort['status'] = np.where(
