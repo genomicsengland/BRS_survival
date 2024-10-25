@@ -34,7 +34,8 @@ class Cohort(object):
 				key in [
 					'icd10', 
 					'hpo', 
-					'cancer_terms', 
+					'cancer_terms',
+					'cancer_abbr',
 					'terms'
 					] for key in featdict.keys()
 					):
@@ -42,7 +43,7 @@ class Cohort(object):
 				# return an error.
 				raise KeyError(
 					'featdict does not contain any of the following keys:'
-					'icd10, hpo, cancer_terms, terms'
+					'icd10, hpo, cancer_terms, terms or cancer_abbr'
 					)
 
 			if 'icd10' in featdict.keys():
@@ -53,6 +54,8 @@ class Cohort(object):
 				self.dterms = featdict['terms']
 			if 'cancer_terms' in featdict.keys():
 				self.cterms = featdict['cancer_terms']
+			if 'cancer_abbr' in featdict.keys():
+				self.cabbr = featdict['cancer_abbr']
 			# we could add the cancer disease types here.
 			# can we build a self based on morphology/histology codes?
 			# or let people do that themselves and just import the data from pids?
@@ -170,7 +173,10 @@ class Cohort(object):
 					self.hpo_table = self.hpo_table.loc[
 						~self.hpo_table['participant_id'].isin(ids)
 					]
-			
+				elif keys == 'cabbr':
+					self.cabbr_table = self.cabbr_table.loc[
+						~self.cabbr_table['participant_id'].isin(ids)
+					]
 			# remove the data from the feature teables too if they exist.
 			# just using if self.age_table is not None: does not work, 
 			# hence the existance of feature_tables , we can track what
@@ -393,6 +399,32 @@ class Cohort(object):
 
 		self.cterm_table = disease_table
 		self.pids['cterm'] = disease_table['participant_id']
+
+
+	def get_cabbr_pids(self):
+		"""Query cancer analysis for participants with a given study abbreviation
+		This is limited to the GEL 100K cancer cohort.
+		"""
+		format_abbr_types = ', '.join(f"'{i}'" for i in self.cabbr)
+	
+		
+		cancer_analysis_sql =(f'''
+			SELECT
+				DISTINCT participant_id,
+				study_abbreviation
+			FROM
+				cancer_analysis
+			WHERE
+				study_abbreviation IN ({format_abbr_types})
+		''')
+
+		cancer_analysis = lab_to_df(
+			sql_query=cancer_analysis_sql,
+			dr=self.version
+			)
+
+		self.cabbr_table = cancer_analysis
+		self.pids['cabbr'] = cancer_analysis['participant_id']
 
 
 	def get_icd10_pids(self, limit=['all']):
@@ -1621,6 +1653,7 @@ class Cohort(object):
 			'icd10',
 			'dterm',
 			'cterm',
+			'cabbr',
 			'hpo',
 			'custom'
 		]
@@ -1651,6 +1684,12 @@ class Cohort(object):
 						conc_tables.append(
 							self.cterm_table.rename(
 								{'disease_type':'diag'},
+								axis=1)
+								)
+					if key == 'cabbr':
+						conc_tables.append(
+							self.cabbr_table.rename(
+								{'study_abbreviation':'diag'},
 								axis=1)
 								)
 					if key == 'hpo':
@@ -1767,7 +1806,7 @@ class Cohort(object):
 
 		# setting tables to none to allow summary() to only use those which we
 		# have calculated.
-		all_ancestry = all_mortality = all_age = all_sex = None
+		all_ancestry = all_mortality = all_age = all_sex = all_omics = all_reg = None
 		# collapse all the features we have identified
 		all_pids = self.concat_cohort(self.pids)
 		for name, feature in self.feature_tables.items():
@@ -1793,7 +1832,7 @@ class Cohort(object):
 			anc=all_ancestry,
 			mort=all_mortality,
 			age=all_age,
-			sex=all_sex
+			sex=all_sex,
 			)
 
 
@@ -1848,12 +1887,13 @@ class Cohort(object):
 			'dterm',
 			'hpo',
 			'cterm',
+			'cabbr',
 			'icd10',
 			'custom']]):   # TODO add custom vcounts.
 			raise RuntimeError('No valid cohorts to summarize found')
 		else:
 			# check which keys have been included in the self.
-			for key in ['dterm', 'hpo', 'cterm' , 'icd10', 'custom']:
+			for key in ['dterm', 'hpo', 'cterm', 'cabbr', 'icd10', 'custom']:
 				if key in self.pids.keys():
 					if key == 'custom':
 						tmpframe = pd.DataFrame({
@@ -1891,7 +1931,6 @@ class Cohort(object):
 					# related to cancer -> is this how we would go about creating a
 					# cancer self?
 					# TODO: add a check for icd-10 codes (confirm diagnosis)
-					# TODO: add a search for study_abbreviation.
 					# TODO: add a ICD-10 -> sample / option.
 					elif key == 'cterm':  
 						self.ont_vcount[key] = (self.cterm_table
@@ -1902,6 +1941,16 @@ class Cohort(object):
 							.disease_type
 							.value_counts()
 						)
+					elif key == 'cabbr':  
+						self.ont_vcount[key] = (self.cabbr_table
+							.drop_duplicates([
+								'participant_id', 
+								'study_abbreviation'
+								])
+							.study_abbreviation
+							.value_counts()
+						)
+					
 					elif key == 'icd10':
 						self.load_icd10_data()
 						# return simple codes
@@ -2055,6 +2104,10 @@ class Cohort(object):
 					]
 			elif key == 'dterm':
 				self.cancer_samples['dterm'] = table.loc[
+					~table['tumour_sample_platekey'].isin(to_drop)
+					]
+			elif key == 'cabbr':
+				self.cancer_samples['cabbr'] = table.loc[
 					~table['tumour_sample_platekey'].isin(to_drop)
 					]
 			elif key == 'hpo':
