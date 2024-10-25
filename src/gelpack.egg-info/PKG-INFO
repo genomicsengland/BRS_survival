@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: gelpack
-Version: 1.0.1
+Version: 1.0.3
 Summary: this package assists in extracting cohorts and calculating survival metrics from the Genomics England 100,000 Genomes Project data.
 Author-email: Christian Bouwens <christian.bouwens@genomicsengland.co.uk>
 Classifier: Programming Language :: Python :: 3
