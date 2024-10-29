@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 import warnings
 import labkey
-from gelpack.gel_utils import lab_to_df
+from gelpack.gel_utils import lab_to_df, force_list
 from functools import reduce
 
 
@@ -47,15 +47,15 @@ class Cohort(object):
 					)
 
 			if 'icd10' in featdict.keys():
-				self.icd10s = featdict['icd10']
+				self.icd10s = force_list(featdict['icd10'])
 			if 'hpo' in featdict.keys():
-				self.hpo = featdict['hpo']
+				self.hpo = force_list(featdict['hpo'])
 			if 'terms' in featdict.keys():
-				self.dterms = featdict['terms']
+				self.dterms = force_list(featdict['terms'])
 			if 'cancer_terms' in featdict.keys():
-				self.cterms = featdict['cancer_terms']
+				self.cterms = force_list(featdict['cancer_terms'])
 			if 'cancer_abbr' in featdict.keys():
-				self.cabbr = featdict['cancer_abbr']
+				self.cabbr = force_list(featdict['cancer_abbr'])
 			# we could add the cancer disease types here.
 			# can we build a self based on morphology/histology codes?
 			# or let people do that themselves and just import the data from pids?
