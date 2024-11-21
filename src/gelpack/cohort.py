@@ -1332,6 +1332,7 @@ class Cohort(object):
 						ca.histology_coded,
 						ca.tumour_delivery_date,
 						ca.germline_delivery_date,
+					 	ca.tumour_clinical_sample_time,
 						ca.preparation_method,
 						ca.tumour_purity,
 						ca.coverage_homogeneity,
@@ -2118,3 +2119,14 @@ class Cohort(object):
 		# if the sample_tables have been filtered
 		# all_cancer_samples gets reset with concat_all():
 		self.concat_all()		
+
+	def apply_survdat(self):
+		from gelpack.survival import Survdat
+		Survdat(
+			df=None,
+			pids=self.all_pids,
+			version=self.version,
+			impute=False
+			)
+		
+
