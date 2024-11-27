@@ -2032,13 +2032,17 @@ class Cohort(object):
 		self.concat_all()
 
 
-	def select_single_ca_sample(self):
+	def select_single_ca_sample(self, limit_to_featdict=False):
 		"""This function attempts to select a single cancer sample from
 		participants with multiple samples. In those cases it first removes
 		samples that are not in cancer_analysis. If there are still remaining
 		samples it will remove non-Primary tumour samples. Finally, if there 
 		are still multiple primary tumour samples it will select one with the 
 		highest tumour_purity, and highest coverage_homogeneity in case of ties.
+		
+		With the limit_to_featdict flag samples are first filtered to limit them
+		to the associated cancer study abbreviation (cancer_abbr) or disease type
+		(cancer_terms).
 		"""
 		self.concat_all()
 		# identify participants with more than 1 sample:
@@ -2051,11 +2055,39 @@ class Cohort(object):
 		dups = subcounts.loc[subcounts['count']>1, 'index']
 		to_drop = []
 		for pid in dups:
+			# we need to keep track which samples we need to drop from the other
+			# tables in the class. 
+			# using a stepwise approach where we update the remaining samples 
+			# so we don't end up with the same sample in subsequent filters.
+
 			tmp_drop = []
 			samps = (self
 				.all_cancer_samples
 				.loc[self.all_cancer_samples['participant_id'] == pid]
 				)
+			# remove samples not associated with the featdict
+			# this only applies to cabbr and disease_type
+			# not HES ICD10 codes.
+			if limit_to_featdict:
+				no_feat_match = []
+				for key in ['cterm', 'cabbr']:
+					if key in self.pids.keys():
+						if key == 'cterm':
+							no_feat_match.append(
+								samps.loc[
+									~samps['disease_type'].isin(self.featdict['cancer_terms']),
+									'tumour_sample_platekey'
+								].tolist()
+							)
+						elif key == 'cabbr':
+							no_feat_match.append(
+								samps.loc[
+									~samps['study_abbreviation'].isin(self.featdict['cancer_abbr']),
+									'tumour_sample_platekey'
+								].tolist()
+							)
+				
+					
 
 			# select a platekey, (first remove those not in cancer_analysis.)
 			no_interp = samps.loc[
@@ -2064,12 +2096,14 @@ class Cohort(object):
 					].tolist()
 
 			tmp_drop += no_interp
+			samps = samps.loc[~samps['tumour_sample_platekey'].isin(tmp_drop)]
 			
 			if (len(tmp_drop) < len(samps)-1): # this means we keep non-primary tumours if no other samples are available.
 				# remove non-primary
 				non_primary = samps.loc[samps['tumour_type']!='PRIMARY',
 					'tumour_sample_platekey'].tolist()
 				tmp_drop += non_primary
+			samps = samps.loc[~samps['tumour_sample_platekey'].isin(tmp_drop)]
 
 			if (len(tmp_drop) < len(samps)-1):
 				# then grab highest tumour_purity and coverage_homogeneity.
@@ -2082,7 +2116,8 @@ class Cohort(object):
 						ascending=[True,True]) 
 					).tumour_sample_platekey.iloc[:-1].tolist()
 				tmp_drop += pur_cov_drop
-			
+			samps = samps.loc[~samps['tumour_sample_platekey'].isin(tmp_drop)]
+
 			to_drop += tmp_drop
 
 		# this should leave one platekey per participant_id.
