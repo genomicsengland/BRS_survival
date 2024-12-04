@@ -11,7 +11,8 @@ import pandas as pd
 import numpy as np
 import warnings
 import labkey
-from gelpack.gel_utils import lab_to_df
+from gelpack.gel_utils import lab_to_df, force_list
+from gelpack.survival import Survdat
 from functools import reduce
 
 
@@ -47,15 +48,15 @@ class Cohort(object):
 					)
 
 			if 'icd10' in featdict.keys():
-				self.icd10s = featdict['icd10']
+				self.icd10s = force_list(featdict['icd10'])
 			if 'hpo' in featdict.keys():
-				self.hpo = featdict['hpo']
+				self.hpo = force_list(featdict['hpo'])
 			if 'terms' in featdict.keys():
-				self.dterms = featdict['terms']
+				self.dterms = force_list(featdict['terms'])
 			if 'cancer_terms' in featdict.keys():
-				self.cterms = featdict['cancer_terms']
+				self.cterms = force_list(featdict['cancer_terms'])
 			if 'cancer_abbr' in featdict.keys():
-				self.cabbr = featdict['cancer_abbr']
+				self.cabbr = force_list(featdict['cancer_abbr'])
 			# we could add the cancer disease types here.
 			# can we build a self based on morphology/histology codes?
 			# or let people do that themselves and just import the data from pids?
@@ -67,6 +68,7 @@ class Cohort(object):
 		self.name = name
 		self.platekeys = None
 		self.groups = {}  # to assign intra-cohort groups.
+		self.survdat = None
 
 		if participants is not None:
 			if participants == 'all_cancer':
@@ -228,6 +230,21 @@ class Cohort(object):
 		# confirm the id is in the cohort.
 		if [x.eq(id) for x in self.pids.values()][0].any():
 			self.groups[group].append(id)
+
+	def initialize_survdat(self, impute=False,df=None):
+		"""
+		Lazily initialize the Survdat object when all necessary data is available.
+		"""
+		self.concat_all()
+
+		if not len(self.all_pids)>0:
+			raise ValueError("PIDs must be set before initializing Survdat.")
+		
+		self.survdat = Survdat(
+			df=df,
+			pids=self.all_pids,
+			version=self.version,
+			impute=impute)
 
 
 	def get_cancer_parts(cls, dr):
@@ -1332,6 +1349,7 @@ class Cohort(object):
 						ca.histology_coded,
 						ca.tumour_delivery_date,
 						ca.germline_delivery_date,
+					 	ca.tumour_clinical_sample_time,
 						ca.preparation_method,
 						ca.tumour_purity,
 						ca.coverage_homogeneity,
@@ -2031,13 +2049,17 @@ class Cohort(object):
 		self.concat_all()
 
 
-	def select_single_ca_sample(self):
+	def select_single_ca_sample(self, limit_to_featdict=False):
 		"""This function attempts to select a single cancer sample from
 		participants with multiple samples. In those cases it first removes
 		samples that are not in cancer_analysis. If there are still remaining
 		samples it will remove non-Primary tumour samples. Finally, if there 
 		are still multiple primary tumour samples it will select one with the 
 		highest tumour_purity, and highest coverage_homogeneity in case of ties.
+		
+		With the limit_to_featdict flag samples are first filtered to limit them
+		to the associated cancer study abbreviation (cancer_abbr) or disease type
+		(cancer_terms).
 		"""
 		self.concat_all()
 		# identify participants with more than 1 sample:
@@ -2050,11 +2072,39 @@ class Cohort(object):
 		dups = subcounts.loc[subcounts['count']>1, 'index']
 		to_drop = []
 		for pid in dups:
+			# we need to keep track which samples we need to drop from the other
+			# tables in the class. 
+			# using a stepwise approach where we update the remaining samples 
+			# so we don't end up with the same sample in subsequent filters.
+
 			tmp_drop = []
 			samps = (self
 				.all_cancer_samples
 				.loc[self.all_cancer_samples['participant_id'] == pid]
 				)
+			# remove samples not associated with the featdict
+			# this only applies to cabbr and disease_type
+			# not HES ICD10 codes.
+			if limit_to_featdict:
+				no_feat_match = []
+				for key in ['cterm', 'cabbr']:
+					if key in self.pids.keys():
+						if key == 'cterm':
+							no_feat_match.append(
+								samps.loc[
+									~samps['disease_type'].isin(self.featdict['cancer_terms']),
+									'tumour_sample_platekey'
+								].tolist()
+							)
+						elif key == 'cabbr':
+							no_feat_match.append(
+								samps.loc[
+									~samps['study_abbreviation'].isin(self.featdict['cancer_abbr']),
+									'tumour_sample_platekey'
+								].tolist()
+							)
+				
+					
 
 			# select a platekey, (first remove those not in cancer_analysis.)
 			no_interp = samps.loc[
@@ -2063,12 +2113,14 @@ class Cohort(object):
 					].tolist()
 
 			tmp_drop += no_interp
+			samps = samps.loc[~samps['tumour_sample_platekey'].isin(tmp_drop)]
 			
 			if (len(tmp_drop) < len(samps)-1): # this means we keep non-primary tumours if no other samples are available.
 				# remove non-primary
 				non_primary = samps.loc[samps['tumour_type']!='PRIMARY',
 					'tumour_sample_platekey'].tolist()
 				tmp_drop += non_primary
+			samps = samps.loc[~samps['tumour_sample_platekey'].isin(tmp_drop)]
 
 			if (len(tmp_drop) < len(samps)-1):
 				# then grab highest tumour_purity and coverage_homogeneity.
@@ -2081,7 +2133,8 @@ class Cohort(object):
 						ascending=[True,True]) 
 					).tumour_sample_platekey.iloc[:-1].tolist()
 				tmp_drop += pur_cov_drop
-			
+			samps = samps.loc[~samps['tumour_sample_platekey'].isin(tmp_drop)]
+
 			to_drop += tmp_drop
 
 		# this should leave one platekey per participant_id.
@@ -2118,3 +2171,14 @@ class Cohort(object):
 		# if the sample_tables have been filtered
 		# all_cancer_samples gets reset with concat_all():
 		self.concat_all()		
+
+	def apply_survdat(self):
+		from gelpack.survival import Survdat
+		Survdat(
+			df=None,
+			pids=self.all_pids,
+			version=self.version,
+			impute=False
+			)
+		
+

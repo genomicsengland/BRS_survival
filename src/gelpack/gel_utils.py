@@ -174,64 +174,202 @@ def force_list(iter):
 
 
 
-
-def translateicd(icd_vec, lookup=None):
+def translateicd(icd_vec, tcga=False, lookup=None):
 	"""As we are importing ICD-10 codes from different RWE sources their 
 	formatting has to be unified. this function cleans the codes and returns
-	a matching disease type. 
+	a matching disease type.
 	
-
 	Args:
 		icd_vec (list): list of str, ICD-10 codes from different sources.
-		icd_dictionary (DataFrame): reference dictionary of disease types
+		tcga (bool): whether to use the TCGA-specific lookup with ICD.O.3 differentiation.
+		lookup (DataFrame): reference dictionary of disease types
 			and regex-form ICD-10 codes
 	"""
 	import re
-	if lookup is None:
-		lookup = [
-			('ADULT_GLIOMA',r"C71[0-9]{0,1}|D43[0-4]{0,1}|D32[0-4]{0,1}|D33[0-4]{0,1}"),
-			('BLADDER',r"C67[0-9]{0,1}|D090|D414"),
-			('BREAST',r"C50[0-9]{0,1}|D05[0-9]{0,1}"),
-			('CARCINOMA_OF_UNKNOWN_PRIMARY',r"C80[0-9]{0,1}|D489"),
-			# ('OTHER',r"C80[0-9]{0,1}|D489"),  # putting unknown in OTHER, like childhood.
-			('COLORECTAL',r"C18[0-9]{0,1}|C20|C19|D010|D012|D011|C17[0-9]{0,1}"
-				r"|C21[0-9]{0,1}|C78$|C784|C785|C788"),  # changed from 
-			('ENDOCRINE',r"C73|C74[0-9]{0,1}|C75[0-9]{0,1}|D093|D44[0-9]{0,1}"),
-			('ENDOMETRIAL_CARCINOMA',r"C53[0-9]{0,1}|C54[0-9]{0,1}"
-				r"|C55[0-9]{0,1}|D070|D06[0,1,7,9]{0,1}"),
-			('HAEMONC',r"C81[0-9]{0,1}|C82[0-9]{0,1}|C83[0-9]{0,1}|C84[0-9]{0,1}"
-				r"|C85[0-9]{0,1}|C86[0-9]{0,1}|C88[0-9]{0,1}|C90[0-9]{0,1}|C91[0-9]{0,1}"
-				r"|C92[0-9]{0,1}|C93[0-9]{0,1}|C94[0-9]{0,1}|C95[0-9]{0,1}|C96[0-9]{0,1}|"
-				r"D47[0-9]{0,1}"),
-			('HEPATOPANCREATOBILIARY',r"C22[0-9]{0,1}|C23|C24[0-9]{0,1}"
-				r"|C25[0-9]{0,1}|C787|D015|D376"),
-			('LUNG',r"C34[0-9]{0,1}|D022|C450|C459"),
-			('MALIGNANT_MELANOMA',r"C43[0-9]{0,1}|D03[0-9]{0,1}"),
-			('NASOPHARYNGEAL',r"C11[0-9]{0,1}"),
-			('ORAL_OROPHARYNGEAL',r"C01[0-9]{0,1}|C02[0-9]{0,1}|C03[0-9]{0,1}|C04[0-9]"
-				r"{0,1}|C05[0-9]{0,1}|C06[0-9]{0,1}|C07[0-9]{0,1}|C08[0-9]{0,1}"
-				r"|C09[0-9]{0,1}|C10[0-9]{0,1}|C00[0-9]{0,1}|C14[0-9]{0,1}|D000|D370"),
-			('OVARIAN',r"C56|C796|D391|C57[0-9]{0,1}"),
-			('PROSTATE',r"C61|D075"),
-			('RENAL',r"C64|C65|C66|C68[0-9]{0,1}|C790|D410|D411|D412"),
-			('SARCOMA',r"C41[0-9]{0,1}|C45\b|C45[1-8]{1}|C46[0-9]{0,1}|C48[0-9]{0,1}"
-				r"|C49[0-9]{0,1}|C40[0-9]{0,1}|C786|D481|D483|D484"),
-			('SINONASAL',r"C12|C30[0-9]{0,1}|C31[0-9]{0,1}"),
-			('TESTICULAR_GERM_CELL_TUMOURS',r"C62[0-9]{0,1}"),
-			('UPPER_GASTROINTESTINAL',r"C15[0-9]{0,1}|D001|C16[0-9]{0,1}"
-				r"|D002|C26[0-9]{0,1}|D017|D019|D379")
-		]
+	import pandas as pd
 
+	def load_study_abbr():
+		"""gelpack contains a translation file for icd-10 and ICD.O.3 codes, this function
+		loads in the relevant file - used for translating codes to GEL study_abbreviations.
+		"""
+		from importlib import resources
+		with resources.path("gelpack",'study_abbrv_translations.tsv') as f:
+			transl_df = pd.read_csv(
+				f, 
+				sep='\t',
+				)
+		
+		return transl_df
+	
+
+	def clean_transl_df(df, icdo3_col='ICD.O.3', catch_all='.*'):
+		"""
+		Cleans the ICD.O.3 column in the transl_df lookup table by:
+		- Limiting ICD.O.3 codes to the first 4 characters.
+		- Replacing empty or missing values with a regex catch-all.
+
+		Args:
+			df (pd.DataFrame): Input DataFrame containing the ICD.O.3 column.
+			icdo3_col (str): Name of the ICD.O.3 column.
+			catch_all (str): Regex pattern to use as the catch-all for empty/missing ICD.O.3.
+
+		Returns:
+			pd.DataFrame: Cleaned DataFrame.
+		"""
+		import pandas as pd
+		import re
+
+		def clean_icdo3(value):
+			if pd.isna(value) or value == '':
+				return catch_all  # Replace empty or missing values with a regex wildcard
+			# Convert to string, remove trailing '.0', and clean forward slashes, dots, and 'X'
+			value_str = str(value).strip()
+			value_str = re.sub(r'\.0$', '', value_str)  # Remove trailing .0
+			return re.sub(r'[X./]', '', value_str)  # Remove X, /, and .
+
+		# Apply cleaning to the ICD.O.3 column
+		df[icdo3_col] = df[icdo3_col].apply(clean_icdo3)
+		return df
+
+	# Default lookup table
+	default_lookup = [
+		('ADULT_GLIOMA',r"C71[0-9]{0,1}|D43[0-4]{0,1}|D32[0-4]{0,1}|D33[0-4]{0,1}"),
+		('BLADDER',r"C67[0-9]{0,1}|D090|D414"),
+		('BREAST',r"C50[0-9]{0,1}|D05[0-9]{0,1}"),
+		('CARCINOMA_OF_UNKNOWN_PRIMARY',r"C80[0-9]{0,1}|D489"),
+		# ('OTHER',r"C80[0-9]{0,1}|D489"),  # putting unknown in OTHER, like childhood.
+		('COLORECTAL',r"C18[0-9]{0,1}|C20|C19|D010|D012|D011|C17[0-9]{0,1}"
+			r"|C21[0-9]{0,1}|C78$|C784|C785|C788"),  # changed from 
+		('ENDOCRINE',r"C73|C74[0-9]{0,1}|C75[0-9]{0,1}|D093|D44[0-9]{0,1}"),
+		('ENDOMETRIAL_CARCINOMA',r"C53[0-9]{0,1}|C54[0-9]{0,1}"
+			r"|C55[0-9]{0,1}|D070|D06[0,1,7,9]{0,1}"),
+		('HAEMONC',r"C81[0-9]{0,1}|C82[0-9]{0,1}|C83[0-9]{0,1}|C84[0-9]{0,1}"
+			r"|C85[0-9]{0,1}|C86[0-9]{0,1}|C88[0-9]{0,1}|C90[0-9]{0,1}|C91[0-9]{0,1}"
+			r"|C92[0-9]{0,1}|C93[0-9]{0,1}|C94[0-9]{0,1}|C95[0-9]{0,1}|C96[0-9]{0,1}|"
+			r"D47[0-9]{0,1}"),
+		('HEPATOPANCREATOBILIARY',r"C22[0-9]{0,1}|C23|C24[0-9]{0,1}"
+			r"|C25[0-9]{0,1}|C787|D015|D376"),
+		('LUNG',r"C34[0-9]{0,1}|D022|C450|C459"),
+		('MALIGNANT_MELANOMA',r"C43[0-9]{0,1}|D03[0-9]{0,1}"),
+		('NASOPHARYNGEAL',r"C11[0-9]{0,1}"),
+		('ORAL_OROPHARYNGEAL',r"C01[0-9]{0,1}|C02[0-9]{0,1}|C03[0-9]{0,1}|C04[0-9]"
+			r"{0,1}|C05[0-9]{0,1}|C06[0-9]{0,1}|C07[0-9]{0,1}|C08[0-9]{0,1}"
+			r"|C09[0-9]{0,1}|C10[0-9]{0,1}|C00[0-9]{0,1}|C14[0-9]{0,1}|D000|D370"),
+		('OVARIAN',r"C56|C796|D391|C57[0-9]{0,1}"),
+		('PROSTATE',r"C61|D075"),
+		('RENAL',r"C64|C65|C66|C68[0-9]{0,1}|C790|D410|D411|D412"),
+		('SARCOMA',r"C41[0-9]{0,1}|C45\b|C45[1-8]{1}|C46[0-9]{0,1}|C48[0-9]{0,1}"
+			r"|C49[0-9]{0,1}|C40[0-9]{0,1}|C786|D481|D483|D484"),
+		('SINONASAL',r"C12|C30[0-9]{0,1}|C31[0-9]{0,1}"),
+		('TESTICULAR_GERM_CELL_TUMOURS',r"C62[0-9]{0,1}"),
+		('UPPER_GASTROINTESTINAL',r"C15[0-9]{0,1}|D001|C16[0-9]{0,1}"
+			r"|D002|C26[0-9]{0,1}|D017|D019|D379")
+	]
+	if not tcga:
+		# Convert the default lookup to a dictionary if it's not provided
+		if lookup is None:
+			lookup = dict(default_lookup)
+
+	if tcga:
+		# Load the TCGA-specific translation DataFrame
+		transl_df = load_study_abbr()
+		transl_df = clean_transl_df(transl_df)
+		# Ensure no duplicates across both 'ICD10' and 'ICD.O.3'
+		duplicates = transl_df[
+			transl_df.duplicated(['ICD10', 'ICD.O.3'], keep=False)
+		].groupby(['ICD10', 'ICD.O.3'])['study_abbreviation'].nunique()
+
+		if not duplicates[duplicates > 1].empty:
+			raise ValueError(
+				f"ICD10 codes with ICD.O.3 combinations associated with multiple Study.Abbreviations: "
+				f"{duplicates[duplicates > 1].index.tolist()}"
+			)
+
+		# Generate a lookup dictionary using both columns
+		lookup = (
+			transl_df.groupby('study_abbreviation')[['ICD10', 'ICD.O.3']]
+			.apply(lambda x: '|'.join(f"{i}-{j}" for i, j in zip(x['ICD10'], x['ICD.O.3'])))
+			.to_dict()
+		)
+
+	
 	def transicd(icd, lookups=lookup):
-		for value, pattern in lookups:
-			if re.search(pattern, icd):
-				return value
-		return 'OTHER'
-	# remove trailing 'X' and any '.'
-	icd_vec_clean = [re.sub('X$|\[.\]|[.]' , '', str(x)) for x in icd_vec]
+		exact_matches = {}
+		catch_all_matches = {}
+
+		# Iterate through the lookup to check for matches
+		for value, pattern in lookups.items():
+			if re.fullmatch(pattern, icd):  # Exact match
+				exact_matches[value] = pattern
+			elif re.search(pattern, icd):  # Catch-all or partial match
+				catch_all_matches[value] = pattern
+
+		# Prefer exact matches over catch-alls
+		if exact_matches:
+			return list(exact_matches.keys())[0]  # Return the first exact match
+		elif catch_all_matches:
+			return list(catch_all_matches.keys())[0]  # Return the first catch-all match
+		return 'OTHER'  # No matches found
+
+	# Clean ICD codes: remove trailing 'X', brackets, dots, slashes
+	icd_vec_clean = [re.sub(r'X$|\[.\]|[.]', '', str(x)) for x in icd_vec]
+
+	# Translate the cleaned ICD codes
 	return list(map(transicd, icd_vec_clean))
 
 
+def clean_icd_table(
+		df, 
+		icd10_col='ICD10', 
+		icdo3_col='ICD.O.3',
+		grade_col=None,
+		joined_col='ICD_Combined', 
+		catch_all='.*'):
+	"""
+	Cleans the ICD10 and ICD.O.3 columns in a table by:
+	- Limiting ICD10 codes to two numeric digits after the initial character.
+	- Removing trailing 'X', brackets, dots, slashes, and any strings following them in ICD.O.3.
+	- Replacing empty or missing ICD.O.3 values with a regex catch-all.
+	- Joining the cleaned columns into a single combined column in the format 'ICD10-ICD.O.3'.
+
+	Args:
+		df (pd.DataFrame): Input DataFrame containing ICD10 and ICD.O.3 columns.
+		icd10_col (str): Name of the column with ICD10 codes.
+		icdo3_col (str): Name of the column with ICD.O.3 codes.
+		 rade_col (str or None): Name of the optional grade column to append to ICD.O.3.
+		joined_col (str): Name of the resulting combined column.
+		catch_all (str): Regex pattern to use as the catch-all for empty/missing ICD.O.3.
+
+	Returns:
+		pd.DataFrame: Cleaned DataFrame with added combined column.
+	"""
+	import pandas as pd
+	import re
+
+	def clean_icd10(value):
+		if pd.isna(value):  # Handle missing values
+			return None
+		#  ICD10 as the initial character and limited to  two numeric digits
+		return re.sub(r'^([A-Z]\d{2}).*$', r'\1', str(value).strip())
+
+	def clean_icdo3(value):
+		if pd.isna(value) or value == '':
+			return catch_all  # Replace empty or missing values with a regex wildcard
+		return re.sub(r'[X./]', '', str(value).strip())
+
+	# Apply cleaning to the ICD10 and ICD.O.3 columns
+	df[icd10_col] = df[icd10_col].apply(clean_icd10)
+	df[icdo3_col] = df[icdo3_col].apply(clean_icdo3)
+	
+	# Optionally append the grade column to ICD.O.3
+	if grade_col and grade_col in df.columns:
+		df[icdo3_col] = df[icdo3_col] + df[grade_col].fillna('').astype(str).str.strip()
+
+
+	# Create a combined column in the 'ICD10-ICD.O.3' format
+	df[joined_col] = df[icd10_col] + '-' + df[icdo3_col].fillna('')
+
+	return df
 
 def tnm_to_stage(t,n,m):
 	if m.str.contains('1'):

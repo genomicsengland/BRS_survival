@@ -114,11 +114,12 @@ def simple_count_plt(
 
 
 def simple_hist_plt(
-	table, 
-	x, 
-	ax, 
-	binwidth=5,  
-	hue=None, 
+	table,
+	x,
+	ax,
+	binwidth=5,
+	hue=None,
+	col_labels=True,
 	mask=False,
 	scale=False,
 	multiple='layer'):
@@ -172,12 +173,12 @@ def simple_hist_plt(
 				labels =  [f'{(v/100):.1%}' for v in c.datavalues]
 			else:
 				labels = [v for v in c.datavalues]
-
-		ax.bar_label(
-			c,
-			labels=labels,
-			padding=-1,
-			fontsize=8)
+		if col_labels:
+			ax.bar_label(
+				c,
+				labels=labels,
+				padding=-1,
+				fontsize=8)
 	# if scale:
 	# 	ax.yaxis.set_major_formatter(mtick.PercentFormatter(datasize))
 	ax.set_ylabel(None)

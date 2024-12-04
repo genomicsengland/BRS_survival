@@ -1,0 +1,975 @@
+study_abbreviation	disease_type	study_name	ICD10	ICD.O.3
+ACC	ENDOCRINE	Adrenocortical carcinoma	C74	
+BLCA	BLADDER	Bladder Urothelial Carcinoma	C67	
+BLCA	BLADDER	Bladder Urothelial Carcinoma	C66	
+BRCA	BREAST	Breast invasive carcinoma	C50	
+CESC	ENDOMETRIAL_CARCINOMA	Cervical squamous cell carcinoma and endocervical adenocarcinoma	C53	
+CHOL	HEPATOPANCREATOBILIARY	Cholangiocarcinoma	C22	81603.0
+CHOL	HEPATOPANCREATOBILIARY	Cholangiocarcinoma	C24	81603.0
+CHOL	HEPATOPANCREATOBILIARY	Cholangiocarcinoma	C24	81803.0
+CHOL	HEPATOPANCREATOBILIARY	Cholangiocarcinoma	C25	81603.0
+CHOL	HEPATOPANCREATOBILIARY	Cholangiocarcinoma	C25	81803.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	
+DLBC	HAEMONC	Lymphoid Neoplasm Diffuse Large B-cell Lymphoma	C83	
+EAC	UPPER_GASTROINTESTINAL	Esophageal adenocarcinoma	C15	81403.0
+EAC	UPPER_GASTROINTESTINAL	Esophageal adenocarcinoma	C15	81406.0
+EDOC	OVARIAN	Ovarian endometrioid adenocarcinoma	C56	83803.0
+EDOC	OVARIAN	Ovarian endometrioid adenocarcinoma	C56	83103.0
+ESCA	UPPER_GASTROINTESTINAL	Esophageal squamous cell carcinoma	C15	80703.0
+GBM	ADULT_GLIOMA	Glioblastoma multiforme	C71	94403.0
+GBM	ADULT_GLIOMA	Glioblastoma multiforme	C71	94413.0
+GBM	ADULT_GLIOMA	Glioblastoma multiforme	C71	94423.0
+GBM	ADULT_GLIOMA	Glioblastoma multiforme	C71	94453.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C18	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C18	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C18	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C18	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C18	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C18	82433.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C20	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C20	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C20	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C20	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C20	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C20	82433.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C15	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C15	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C15	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C15	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C15	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C15	82433.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C16	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C16	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C16	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C16	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C16	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C16	82433.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C17	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C17	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C17	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C17	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C17	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C17	82433.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C26	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C26	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C26	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C26	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C26	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C26	82433.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C22	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C22	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C22	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C22	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C22	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C22	82433.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C24	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C24	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C24	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C24	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C24	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C24	82433.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C25	82403.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C25	82463.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C25	82493.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C25	82443.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C25	82413.0
+GINET	UPPER_GASTROINTESTINAL	Colorectal and Upper GI neuroendocrine	C25	82433.0
+LGSOC	OVARIAN	Ovarian serous cystadenocarcinoma	C56	84413.0
+LGSOC	OVARIAN	Ovarian serous cystadenocarcinoma	C48	84413.0
+LGSOC	OVARIAN	Ovarian serous cystadenocarcinoma	C57	84413.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C00	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C01	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C03	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C04	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C05	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C06	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C08	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C10	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C11	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C12	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C13	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C14	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C30	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C31	
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C32	
+KICH	RENAL	Kidney Chromophobe	C64	83173.0
+KICH	RENAL	Kidney Chromophobe	C65	83173.0
+KICH	RENAL	Kidney Chromophobe	C68	83173.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C64	83161.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C64	83103.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C64	83123.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C64	83183.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C65	83161.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C65	83103.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C65	83123.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C65	83183.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C68	83161.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C68	83103.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C68	83123.0
+KIRC	RENAL	Kidney renal clear cell carcinoma	C68	83183.0
+KIRP	RENAL	Kidney renal papillary cell carcinoma	C64	82603.0
+KIRP	RENAL	Kidney renal papillary cell carcinoma	C64	80503.0
+KIRP	RENAL	Kidney renal papillary cell carcinoma	C68	82603.0
+KIRP	RENAL	Kidney renal papillary cell carcinoma	C68	80503.0
+KIRP	RENAL	Kidney renal papillary cell carcinoma	C65	82603.0
+KIRP	RENAL	Kidney renal papillary cell carcinoma	C65	80503.0
+LAML	HAEMONC	Acute Myeloid Leukemia	C92	
+LCML	HAEMONC	Chronic Myelogenous Leukemia	C93	
+LCNEC	LUNG	Lung neuroendocrine	C34	80123.0
+LCNEC	LUNG	Lung neuroendocrine	C34	80413.0
+LCNEC	LUNG	Lung neuroendocrine	C34	82403.0
+LCNEC	LUNG	Lung neuroendocrine	C34	80133.0
+LCNEC	LUNG	Lung neuroendocrine	C34	82493.0
+LCNEC	LUNG	Lung neuroendocrine	C34	82463.0
+LCNEC	LUNG	Lung neuroendocrine	C34	80453.0
+LCNEC	LUNG	Lung neuroendocrine	C34	82443.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	93803.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	94003.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	94441.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	93823.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	94013.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	94503.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	94513.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	93853.0
+LGG	ADULT_GLIOMA	Brain Lower Grade Glioma	C71	94213.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C56	84613.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C56	83303.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C56	84603.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C48	84613.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C48	83303.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C48	84603.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C57	84613.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C57	83303.0
+HGSOC	OVARIAN	High grade ovarian serous cystadenocarcinoma	C57	84603.0
+LIHC	HEPATOPANCREATOBILIARY	Liver hepatocellular carcinoma	C22	81703.0
+LIHC	HEPATOPANCREATOBILIARY	Liver hepatocellular carcinoma	C22	81713.0
+LIHC	HEPATOPANCREATOBILIARY	Liver hepatocellular carcinoma	C22	81723.0
+LIHC	HEPATOPANCREATOBILIARY	Liver hepatocellular carcinoma	C22	81733.0
+LIHC	HEPATOPANCREATOBILIARY	Liver hepatocellular carcinoma	C22	81743.0
+LIHC	HEPATOPANCREATOBILIARY	Liver hepatocellular carcinoma	C22	81753.0
+LIHC	HEPATOPANCREATOBILIARY	Liver hepatocellular carcinoma	C22	81803.0
+LUAD	LUNG	Lung adenocarcinoma	C34	81403.0
+LUAD	LUNG	Lung adenocarcinoma	C34	81406.0
+LUAD	LUNG	Lung adenocarcinoma	C34	83103.0
+LUAD	LUNG	Lung adenocarcinoma	C34	84403.0
+LUAD	LUNG	Lung adenocarcinoma	C34	80223.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82303.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82503.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82533.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82543.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82553.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82563.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82603.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82653.0
+LUAD	LUNG	Lung adenocarcinoma	C34	83233.0
+LUAD	LUNG	Lung adenocarcinoma	C34	84803.0
+LUAD	LUNG	Lung adenocarcinoma	C34	85503.0
+LUAD	LUNG	Lung adenocarcinoma	C34	85513.0
+LUAD	LUNG	Lung adenocarcinoma	C34	85743.0
+LUSC	LUNG	Lung squamous cell carcinoma	C34	80703.0
+LUSC	LUNG	Lung squamous cell carcinoma	C34	80713.0
+LUSC	LUNG	Lung squamous cell carcinoma	C34	80723.0
+LUSC	LUNG	Lung squamous cell carcinoma	C34	80743.0
+LUSC	LUNG	Lung squamous cell carcinoma	C34	80833.0
+LUSC	LUNG	Lung squamous cell carcinoma	C34	80843.0
+LUSC	LUNG	Lung squamous cell carcinoma	C34	81233.0
+MESO	LUNG	Mesothelioma	C45	90503.0
+MESO	LUNG	Mesothelioma	C45	90523.0
+MESO	LUNG	Mesothelioma	C45	90513.0
+MESO	LUNG	Mesothelioma	C45	90533.0
+MESO	LUNG	Mesothelioma	C47	90503.0
+MESO	LUNG	Mesothelioma	C47	90523.0
+MESO	LUNG	Mesothelioma	C47	90513.0
+MESO	LUNG	Mesothelioma	C47	90533.0
+PAAD	HEPATOPANCREATOBILIARY	Pancreatic adenocarcinoma	C25	85003.0
+PAAD	HEPATOPANCREATOBILIARY	Pancreatic adenocarcinoma	C25	81403.0
+PAAD	HEPATOPANCREATOBILIARY	Pancreatic adenocarcinoma	C25	81406.0
+PAAD	HEPATOPANCREATOBILIARY	Pancreatic adenocarcinoma	C25	85603.0
+PAAD	HEPATOPANCREATOBILIARY	Pancreatic adenocarcinoma	C24	85003.0
+PAAD	HEPATOPANCREATOBILIARY	Pancreatic adenocarcinoma	C24	81403.0
+PAAD	HEPATOPANCREATOBILIARY	Pancreatic adenocarcinoma	C24	81406.0
+PAAD	HEPATOPANCREATOBILIARY	Pancreatic adenocarcinoma	C24	85603.0
+PCPG	ENDOCRINE	Pheochromocytoma and Paraganglioma	D35	
+PCPG	ENDOCRINE	Pheochromocytoma and Paraganglioma	D44	
+PCPG	ENDOCRINE	Pheochromocytoma and Paraganglioma	D75	
+PCPG	ENDOCRINE	Pheochromocytoma and Paraganglioma	C79	
+PRAD	PROSTATE	Prostate adenocarcinoma	C61	
+READ	COLORECTAL	Rectum adenocarcinoma	C19	
+READ	COLORECTAL	Rectum adenocarcinoma	C20	
+SARC	SARCOMA	Sarcoma	C40	
+SARC	SARCOMA	Sarcoma	C41	
+SARC	SARCOMA	Sarcoma	C49	
+SARC	SARCOMA	Sarcoma	C47	
+SARC	SARCOMA	Sarcoma	C48	
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C43	
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	
+STAD	UPPER_GASTROINTESTINAL	Stomach adenocarcinoma	C16	
+STAD	UPPER_GASTROINTESTINAL	Stomach adenocarcinoma	C26	
+TGCT	TESTICULAR_GERM_CELL_TUMOURS	Testicular Germ Cell Tumors	C62	
+TGCT	TESTICULAR_GERM_CELL_TUMOURS	Testicular Germ Cell Tumors	C63	
+THCA	ENDOCRINE	Thyroid carcinoma	C73	
+THYM	LUNG	Thymoma	C37	
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	83803.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	89803.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	83103.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	84803.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	84603.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	80203.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	81403.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	81406.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	83233.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	85703.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	82553.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	82603.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C54	85603.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	83803.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	89803.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	83103.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	84803.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	84603.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	80203.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	81403.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	81406.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	83233.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	85703.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	82553.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	82603.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C55	85603.0
+UCESC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Serous Carcinoma	C54	84413.0
+UCESC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Serous Carcinoma	C55	84413.0
+UCS	ENDOMETRIAL_CARCINOMA	Uterine Carcinosarcoma	C55	89303.0
+UCS	ENDOMETRIAL_CARCINOMA	Uterine Carcinosarcoma	C55	89313.0
+UCS	ENDOMETRIAL_CARCINOMA	Uterine Carcinosarcoma	C55	88053.0
+UCS	ENDOMETRIAL_CARCINOMA	Uterine Carcinosarcoma	C54	89303.0
+UCS	ENDOMETRIAL_CARCINOMA	Uterine Carcinosarcoma	C54	89313.0
+UCS	ENDOMETRIAL_CARCINOMA	Uterine Carcinosarcoma	C54	88053.0
+UVM	MALIGNANT_MELANOMA	Uveal Melanoma	C69	
+DERM	OTHER	 Other malignant neoplasms of skin	C44	80333.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	80703.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	80903.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	80913.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	80923.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	80973.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	82473.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	84093.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	87202.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	88023.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	88113.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	88153.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	88303.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	88321.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	88323.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	91203.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	96903.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	97003.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	97023.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	97093.0
+DERM	OTHER	 Other malignant neoplasms of skin	C44	97183.0
+AML	HAEMONC	Acute myeloid Leukaemia	C42	98613.0
+AML	HAEMONC	Acute myeloid Leukaemia	C92	98613.0
+AML	HAEMONC	Acute myeloid Leukaemia	C42	98673.0
+AML	HAEMONC	Acute myeloid Leukaemia	C42	98713.0
+AML	HAEMONC	Acute myeloid Leukaemia	C42	98723.0
+AML	HAEMONC	Acute myeloid Leukaemia	C42	98913.0
+AML	HAEMONC	Acute myeloid Leukaemia	C42	98953.0
+AML	HAEMONC	Acute myeloid Leukaemia	C42	98963.0
+BLAD	BLADDER	Bladder other	C67	80106.0
+BLAD	BLADDER	Bladder other	C67	80333.0
+BLAD	BLADDER	Bladder other	C67	80703.0
+BLAD	BLADDER	Bladder other	C67	80713.0
+BLAD	BLADDER	Bladder other	C67	80753.0
+BLAD	BLADDER	Bladder other	C67	81201.0
+BLAD	BLADDER	Bladder other	C67	81202.0
+BLAD	BLADDER	Bladder other	C67	81403.0
+BLAD	BLADDER	Bladder other	C67	84803.0
+BLAD	BLADDER	Bladder other	C67	88903.0
+BLCA	BLADDER	Bladder Urothelial Carcinoma	C67	81203.0
+BLCA	BLADDER	Bladder Urothelial Carcinoma	C67	81301.0
+BLCA	BLADDER	Bladder Urothelial Carcinoma	C67	81302.0
+BLCA	BLADDER	Bladder Urothelial Carcinoma	C67	81303.0
+BRCA	BREAST	Breast invasive carcinoma	C50	80103.0
+BRCA	BREAST	Breast invasive carcinoma	C50	80203.0
+BRCA	BREAST	Breast invasive carcinoma	C50	80323.0
+BRCA	BREAST	Breast invasive carcinoma	C50	81403.0
+BRCA	BREAST	Breast invasive carcinoma	C50	82003.0
+BRCA	BREAST	Breast invasive carcinoma	C50	82013.0
+BRCA	BREAST	Breast invasive carcinoma	C50	82113.0
+BRCA	BREAST	Breast invasive carcinoma	C50	82553.0
+BRCA	BREAST	Breast invasive carcinoma	C50	83103.0
+BRCA	BREAST	Breast invasive carcinoma	C50	84013.0
+BRCA	BREAST	Breast invasive carcinoma	C50	84803.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85002.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85003.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85005.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85033.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85073.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85103.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85202.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85203.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85213.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85223.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85233.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85243.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85303.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85413.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85603.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85723.0
+BRCA	BREAST	Breast invasive carcinoma	C50	85753.0
+BRCA	BREAST	Breast invasive carcinoma	C50	88013.0
+BRCA	BREAST	Breast invasive carcinoma	C50	88503.0
+BRCA	BREAST	Breast invasive carcinoma	C50	90203.0
+BRCA	BREAST	Breast invasive carcinoma	C50	91203.0
+CHOL	HEPATOPANCREATOBILIARY	Cholangiocarcinoma 	C24	81623.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	81403.0
+COAD	COLORECTAL	Colon adenocarcinoma	C19	81403.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	81433.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	81443.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	82102.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	82103.0
+COAD	COLORECTAL	Colon adenocarcinoma	C19	82103.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	82113.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	82133.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	82613.0
+COAD	COLORECTAL	Colon adenocarcinoma	C19	82613.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	82632.0
+COAD	COLORECTAL	Colon adenocarcinoma	C19	82632.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	82633.0
+COAD	COLORECTAL	Colon adenocarcinoma	C19	82633.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	82653.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	84803.0
+COAD	COLORECTAL	Colon adenocarcinoma	C19	84803.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	84813.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	84903.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	85743.0
+COAD	COLORECTAL	Colon adenocarcinoma	C18	90506.0
+GINET	COLORECTAL	Colorectal and Upper GI neuroendocrine	C18	80133.0
+GINET	COLORECTAL	Colorectal and Upper GI neuroendocrine	C18	80413.0
+GINET	COLORECTAL	Colorectal and Upper GI neuroendocrine	C22	82406.0
+GINET	COLORECTAL	Colorectal and Upper GI neuroendocrine	C22	82496.0
+GINET	COLORECTAL	Colorectal and Upper GI neuroendocrine	C16	89361.0
+GINET	COLORECTAL	Colorectal and Upper GI neuroendocrine	C16	89363.0
+GINET	COLORECTAL	Colorectal and Upper GI neuroendocrine	C17	89363.0
+COLO	COLORECTAL	Colorectal other	C18	80003.0
+CRC	COLORECTAL	Colorectal other	C20	80003.0
+CRC	COLORECTAL	Colorectal other	C48	80203.0
+CRC	COLORECTAL	Colorectal other	C20	80703.0
+CRC	COLORECTAL	Colorectal other	C21	80703.0
+CRC	COLORECTAL	Colorectal other	C18	81402.0
+CRC	COLORECTAL	Colorectal other	C19	81402.0
+CRC	COLORECTAL	Colorectal other	C48	81403.0
+CRC	COLORECTAL	Colorectal other	C18	84801.0
+CRC	COLORECTAL	Colorectal other	C18	85103.0
+CRC	COLORECTAL	Colorectal other	C48	86801.0
+CRC	COLORECTAL	Colorectal other	C48	86803.0
+CRC	COLORECTAL	Colorectal other	C21	87203.0
+CRC	COLORECTAL	Colorectal other	C21	87433.0
+CRC	COLORECTAL	Colorectal other	C48	88063.0
+CRC	COLORECTAL	Colorectal other	C18	88903.0
+CRC	COLORECTAL	Colorectal other	C19	88903.0
+CRC	COLORECTAL	Colorectal other	C18	89901.0
+CRC	COLORECTAL	Colorectal other	C48	94903.0
+ENDO	ENDOCRINE	Endocrine other	C75	81400.0
+ENDO	ENDOCRINE	Endocrine other	C75	82720.0
+ENDO	ENDOCRINE	Endocrine other	C75	82721.0
+ENDO	ENDOCRINE	Endocrine other	C75	86803.0
+ENDO	ENDOCRINE	Endocrine other	C75	86921.0
+ENDO	ENDOCRINE	Endocrine other	C75	93953.0
+EAC	UPPER_GASTROINTESTINAL	Esophageal adenocarcinoma	C15	81443.0
+EAC	UPPER_GASTROINTESTINAL	Esophageal adenocarcinoma	C15	82553.0
+EAC	UPPER_GASTROINTESTINAL	Esophageal adenocarcinoma	C15	84803.0
+EAC	UPPER_GASTROINTESTINAL	Esophageal adenocarcinoma	C15	84903.0
+ESO 	UPPER_GASTROINTESTINAL	Esophageal other 	C15	81453.0
+ESO 	UPPER_GASTROINTESTINAL	Esophageal other 	C15	85743.0
+ESO 	UPPER_GASTROINTESTINAL	Esophageal other 	C15	87713.0
+ESCA	UPPER_GASTROINTESTINAL	Esophageal squamous cell carcinoma	C15	80713.0
+HAEM	HAEMONC	Haematological malignancy other	C77	80006.0
+HAEM	HAEMONC	Haematological malignancy other	C80	80106.0
+HAEM	HAEMONC	Haematological malignancy other	C77	80706.0
+HAEM	HAEMONC	Haematological malignancy other	C79	80706.0
+HAEM	HAEMONC	Haematological malignancy other	C80	80706.0
+HAEM	HAEMONC	Haematological malignancy other	C80	80716.0
+HAEM	HAEMONC	Haematological malignancy other	C77	80856.0
+HAEM	HAEMONC	Haematological malignancy other	C80	81406.0
+HAEM	HAEMONC	Haematological malignancy other	C80	82009.0
+HAEM	HAEMONC	Haematological malignancy other	C77	82406.0
+HAEM	HAEMONC	Haematological malignancy other	C80	84416.0
+HAEM	HAEMONC	Haematological malignancy other	C77	87206.0
+HAEM	HAEMONC	Haematological malignancy other	C80	87206.0
+HAEM	HAEMONC	Haematological malignancy other	C42	96893.0
+HAEM	HAEMONC	Haematological malignancy other	C77	97053.0
+HAEM	HAEMONC	Haematological malignancy other	C77	97293.0
+HAEM	HAEMONC	Haematological malignancy other	C42	97413.0
+HAEM	HAEMONC	Haematological malignancy other	C42	98333.0
+HAEM	HAEMONC	Haematological malignancy other	C42	98343.0
+HAEM	HAEMONC	Haematological malignancy other	C42	98353.0
+HAEM	HAEMONC	Haematological malignancy other	C91	98353.0
+HAEM	HAEMONC	Haematological malignancy other	C42	98363.0
+HAEM	HAEMONC	Haematological malignancy other	C42	98373.0
+HAEM	HAEMONC	Haematological malignancy other	C92	98633.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99203.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99503.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99623.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99633.0
+HAEM	HAEMONC	Haematological malignancy other	C77	99701.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99713.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99803.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99833.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99843.0
+HAEM	HAEMONC	Haematological malignancy other	C42	99853.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C33	80203.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C32	80413.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C31	80513.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C32	80702.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C30	80833.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C31	81403.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C30	82003.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C30	82603.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C30	84803.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C32	85603.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C31	88053.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C30	89203.0
+HAN	ORAL_OROPHARYNGEAL	Head and Neck other	C30	95223.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C00	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C05	80323.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C06	80513.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C06	80523.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C03	80525.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C01	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C03	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C04	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C05	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C06	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C10	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C11	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C12	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C13	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C30	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C31	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C32	80703.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C01	80713.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	80713.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C03	80713.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C04	80713.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C06	80713.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	80713.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C32	80713.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	80723.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	80723.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C10	80723.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	80753.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	80833.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C05	80833.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	80833.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C12	80833.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C01	80853.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	80853.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C03	80863.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C05	80863.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	80863.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	81403.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C08	81473.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C03	82003.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C05	82003.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	82003.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C08	82003.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C11	82003.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	84303.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C06	84303.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C08	84303.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	85003.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C03	87203.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C05	87203.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	87206.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	88003.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C03	89203.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	89412.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	89823.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	96503.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	96713.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	96733.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C07	96803.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C09	96803.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C11	96803.0
+HNSC	ORAL_OROPHARYNGEAL	Head and Neck squamous cell carcinoma	C02	97023.0
+HPB	HEPATOPANCREATOBILIARY	Hepatopancreatobiliary other	C25	80003.0
+HPB	HEPATOPANCREATOBILIARY	Hepatopancreatobiliary other	C22	81206.0
+HPB	HEPATOPANCREATOBILIARY	Hepatopancreatobiliary other	C22	81403.0
+HPB	HEPATOPANCREATOBILIARY	Hepatopancreatobiliary other	C23	81403.0
+HPB	HEPATOPANCREATOBILIARY	Hepatopancreatobiliary other	C24	81443.0
+HPB	HEPATOPANCREATOBILIARY	Hepatopancreatobiliary other	C25	84531.0
+HPB	HEPATOPANCREATOBILIARY	Hepatopancreatobiliary other	C25	85503.0
+HPB	HEPATOPANCREATOBILIARY	Hepatopancreatobiliary other	C22	89703.0
+INSIT		In-situ and pre-malignant lesions	D04	80702.0
+INSIT		In-situ and pre-malignant lesions	D04	80812.0
+INSIT		In-situ and pre-malignant lesions	D35	81400.0
+INSIT		In-situ and pre-malignant lesions	D44	81401.0
+INSIT		In-situ and pre-malignant lesions	D35	82710.0
+INSIT		In-situ and pre-malignant lesions	D35	82800.0
+INSIT		In-situ and pre-malignant lesions	D05	85002.0
+INSIT		In-situ and pre-malignant lesions	D03	87422.0
+LUAD	LUNG	Lung adenocarcinoma	C34	82523.0
+LUG	LUNG	Lung other	C34	80003.0
+LUG	LUNG	Lung other	C34	80103.0
+LUG	LUNG	Lung other	C34	80333.0
+LUG	LUNG	Lung other	C34	80463.0
+LUG	LUNG	Lung other	C34	80823.0
+LUG	LUNG	Lung other	C34	81402.0
+LUG	LUNG	Lung other	C34	82003.0
+LUG	LUNG	Lung other	C34	82502.0
+LUG	LUNG	Lung other	C34	84303.0
+LUG	LUNG	Lung other	C34	85603.0
+LUG	LUNG	Lung other	C34	88153.0
+LUG	LUNG	Lung other	C34	88903.0
+LUG	LUNG	Lung other	C34	89803.0
+LUG	LUNG	Lung other	C34	90413.0
+LUG	LUNG	Lung other	C34	96633.0
+LUG	LUNG	Lung other	C34	96803.0
+LUG	LUNG	Lung other	C34	96993.0
+LYMP	HAEMONC	Lymphoid	C42	95903.0
+LYMP	HAEMONC	Lymphoid	C42	95913.0
+LYMP	HAEMONC	Lymphoid	C77	95913.0
+LYMP	HAEMONC	Lymphoid	C77	96503.0
+LYMP	HAEMONC	Lymphoid	C77	96523.0
+LYMP	HAEMONC	Lymphoid	C81	96523.0
+LYMP	HAEMONC	Lymphoid	C77	96593.0
+LYMP	HAEMONC	Lymphoid	C77	96633.0
+LYMP	HAEMONC	Lymphoid	C77	96703.0
+LYMP	HAEMONC	Lymphoid	C42	96713.0
+LYMP	HAEMONC	Lymphoid	C77	96733.0
+LYMP	HAEMONC	Lymphoid	C42	96803.0
+LYMP	HAEMONC	Lymphoid	C77	96803.0
+LYMP	HAEMONC	Lymphoid	C77	96873.0
+LYMP	HAEMONC	Lymphoid	C77	96903.0
+LYMP	HAEMONC	Lymphoid	C77	96913.0
+LYMP	HAEMONC	Lymphoid	C77	96953.0
+LYMP	HAEMONC	Lymphoid	C77	96983.0
+LYMP	HAEMONC	Lymphoid	C77	96993.0
+LYMP	HAEMONC	Lymphoid	C77	97023.0
+LYMP	HAEMONC	Lymphoid	C42	97323.0
+LYMP	HAEMONC	Lymphoid	C42	98013.0
+LYMP	HAEMONC	Lymphoid	C42	98113.0
+LYMP	HAEMONC	Lymphoid	C42	98123.0
+LYMP	HAEMONC	Lymphoid	C42	98143.0
+LYMP	HAEMONC	Lymphoid	C91	98203.0
+LYMP	HAEMONC	Lymphoid	C42	98233.0
+LYMP	HAEMONC	Lymphoid	C91	98233.0
+LYMP	HAEMONC	Lymphoid	C42	98263.0
+LYMP	HAEMONC	Lymphoid	C42	98273.0
+DLBC	HAEMONC	Lymphoid Neoplasm Diffuse Large B-cell Lymphoma	C38	96793.0
+DLBC	HAEMONC	Lymphoid Neoplasm Diffuse Large B-cell Lymphoma	C17	96803.0
+DLBC	HAEMONC	Lymphoid Neoplasm Diffuse Large B-cell Lymphoma	C18	96803.0
+MESO	LUNG	Mesothelioma	C38	90503.0
+MESO	LUNG	Mesothelioma	C38	90513.0
+MESO	LUNG	Mesothelioma	C38	90523.0
+MESO	LUNG	Mesothelioma	C38	90533.0
+MYEL	HAEMONC	Myeloid	C42	98603.0
+MYEL	HAEMONC	Myeloid	C42	98633.0
+MYEL	HAEMONC	Myeloid	C42	98663.0
+MYEL	HAEMONC	Myeloid	C42	98753.0
+MYEL	HAEMONC	Myeloid	C42	98763.0
+MYEL	HAEMONC	Myeloid	C42	99303.0
+MYEL	HAEMONC	Myeloid	C42	99453.0
+MYEL	HAEMONC	Myeloid	C42	99603.0
+MYEL	HAEMONC	Myeloid	C42	99613.0
+MYEL	HAEMONC	Myeloid	C42	99753.0
+MYEL	HAEMONC	Myeloid	C42	99823.0
+MYEL	HAEMONC	Myeloid	C42	99893.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	80001.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	80003.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	87206.0
+NEURO	ADULT_GLIOMA	Neurological other	C70	88151.0
+NEURO	ADULT_GLIOMA	Neurological other	C70	91503.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	91503.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	91611.0
+NEURO	ADULT_GLIOMA	Neurological other	C72	93703.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	93831.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	93913.0
+NEURO	ADULT_GLIOMA	Neurological other	C72	93913.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	93923.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	93963.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	94121.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	94211.0
+NEURO	ADULT_GLIOMA	Neurological other	C72	94211.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	94243.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	94303.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	94703.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	94743.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	94763.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	94773.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	95003.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	95033.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	95053.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	95061.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	95091.0
+NEURO	ADULT_GLIOMA	Neurological other	C72	95091.0
+NEURO	ADULT_GLIOMA	Neurological other	C70	95300.0
+NEURO	ADULT_GLIOMA	Neurological other	C70	95303.0
+NEURO	ADULT_GLIOMA	Neurological other	C70	95320.0
+NEURO	ADULT_GLIOMA	Neurological other	C70	95340.0
+NEURO	ADULT_GLIOMA	Neurological other	C70	95370.0
+NEURO	ADULT_GLIOMA	Neurological other	C70	95391.0
+NEURO	ADULT_GLIOMA	Neurological other	C72	95600.0
+NEURO	ADULT_GLIOMA	Neurological other	C71	96803.0
+EDOC	OVARIAN	Ovarian endometrioid adenocarcinoma	C56	81403.0
+EDOC	OVARIAN	Ovarian endometrioid adenocarcinoma	C57	81403.0
+EDOC	OVARIAN	Ovarian endometrioid adenocarcinoma	C56	83233.0
+OVAR	OVARIAN	Ovarian other	C56	80003.0
+OVAR	OVARIAN	Ovarian other	C56	80103.0
+OVAR	OVARIAN	Ovarian other	C56	80203.0
+OVAR	OVARIAN	Ovarian other	C56	80703.0
+OVAR	OVARIAN	Ovarian other	C56	81406.0
+OVAR	OVARIAN	Ovarian other	C56	84403.0
+OVAR	OVARIAN	Ovarian other	C57	84412.0
+OVAR	OVARIAN	Ovarian other	C56	84421.0
+OVAR	OVARIAN	Ovarian other	C56	84425.0
+OVAR	OVARIAN	Ovarian other	C56	84602.0
+OVAR	OVARIAN	Ovarian other	C56	84703.0
+OVAR	OVARIAN	Ovarian other	C56	84721.0
+OVAR	OVARIAN	Ovarian other	C56	84743.0
+OVAR	OVARIAN	Ovarian other	C56	84803.0
+OVAR	OVARIAN	Ovarian other	C56	85763.0
+OVAR	OVARIAN	Ovarian other	C56	85903.0
+OVAR	OVARIAN	Ovarian other	C56	86203.0
+OVAR	OVARIAN	Ovarian other	C56	86311.0
+OVAR	OVARIAN	Ovarian other	C56	89803.0
+OVAR	OVARIAN	Ovarian other	C57	89803.0
+OVAR	OVARIAN	Ovarian other	C56	90603.0
+OVAR	OVARIAN	Ovarian other	C56	90713.0
+OVAR	OVARIAN	Ovarian other	C56	90803.0
+OVAR	OVARIAN	Ovarian other	C56	90843.0
+OVAR	OVARIAN	Ovarian other	C56	90853.0
+OVAR	OVARIAN	Ovarian other	C56	91103.0
+OVAR	OVARIAN	Ovarian other	C56	96703.0
+PRAD	PROSTATE	Prostate adenocarcinoma	C61	81403.0
+PROS	PROSTATE	Prostate other	C61	80003.0
+PROS	PROSTATE	Prostate other	C61	80006.0
+PROS	PROSTATE	Prostate other	C61	80103.0
+PROS	PROSTATE	Prostate other	C61	81405.0
+PROS	PROSTATE	Prostate other	C61	81482.0
+PROS	PROSTATE	Prostate other	C61	85503.0
+PROS	PROSTATE	Prostate other	C61	89353.0
+READ	COLORECTAL	Rectum adenocarcinoma	C20	81403.0
+READ	COLORECTAL	Rectum adenocarcinoma	C20	81443.0
+READ	COLORECTAL	Rectum adenocarcinoma	C20	82103.0
+READ	COLORECTAL	Rectum adenocarcinoma	C20	82613.0
+READ	COLORECTAL	Rectum adenocarcinoma	C20	82632.0
+READ	COLORECTAL	Rectum adenocarcinoma	C20	82633.0
+READ	COLORECTAL	Rectum adenocarcinoma	C20	84803.0
+READ	COLORECTAL	Rectum adenocarcinoma	C21	84803.0
+READ	COLORECTAL	Rectum adenocarcinoma	C20	84903.0
+NEPH	RENAL	Renal other	C64	80001.0
+NEPH	RENAL	Renal other	C64	80003.0
+NEPH	RENAL	Renal other	C64	80333.0
+NEPH	RENAL	Renal other	C64	80703.0
+NEPH	RENAL	Renal other	C68	80703.0
+NEPH	RENAL	Renal other	C65	81202.0
+NEPH	RENAL	Renal other	C66	81202.0
+NEPH	RENAL	Renal other	C64	81203.0
+NEPH	RENAL	Renal other	C65	81203.0
+NEPH	RENAL	Renal other	C66	81203.0
+NEPH	RENAL	Renal other	C68	81203.0
+NEPH	RENAL	Renal other	C65	81302.0
+NEPH	RENAL	Renal other	C68	81302.0
+NEPH	RENAL	Renal other	C65	81303.0
+NEPH	RENAL	Renal other	C66	81303.0
+NEPH	RENAL	Renal other	C64	81403.0
+NEPH	RENAL	Renal other	C64	82403.0
+NEPH	RENAL	Renal other	C64	82553.0
+NEPH	RENAL	Renal other	C64	82903.0
+NEPH	RENAL	Renal other	C64	83163.0
+NEPH	RENAL	Renal other	C64	83193.0
+NEPH	RENAL	Renal other	C64	83231.0
+NEPH	RENAL	Renal other	C64	84803.0
+NEPH	RENAL	Renal other	C64	88903.0
+NEPH	RENAL	Renal other	C64	89603.0
+NEPH	RENAL	Renal other	C64	89643.0
+NEPH	RENAL	Renal other	C64	93643.0
+NEPH	RENAL	Renal other	C64	95903.0
+NEPH	RENAL	Renal other	C64	96993.0
+SARC	SARCOMA	Sarcoma	C41	80003.0
+SARC	SARCOMA	Sarcoma	C49	80003.0
+SARC	SARCOMA	Sarcoma	C41	80033.0
+SARC	SARCOMA	Sarcoma	C49	80043.0
+SARC	SARCOMA	Sarcoma	C49	80106.0
+SARC	SARCOMA	Sarcoma	C49	87143.0
+SARC	SARCOMA	Sarcoma	C40	88003.0
+SARC	SARCOMA	Sarcoma	C41	88003.0
+SARC	SARCOMA	Sarcoma	C48	88003.0
+SARC	SARCOMA	Sarcoma	C49	88003.0
+SARC	SARCOMA	Sarcoma	C40	88013.0
+SARC	SARCOMA	Sarcoma	C41	88013.0
+SARC	SARCOMA	Sarcoma	C49	88013.0
+SARC	SARCOMA	Sarcoma	C76	88013.0
+SARC	SARCOMA	Sarcoma	C49	88021.0
+SARC	SARCOMA	Sarcoma	C40	88023.0
+SARC	SARCOMA	Sarcoma	C48	88023.0
+SARC	SARCOMA	Sarcoma	C49	88023.0
+SARC	SARCOMA	Sarcoma	C76	88023.0
+SARC	SARCOMA	Sarcoma	C49	88033.0
+SARC	SARCOMA	Sarcoma	C40	88043.0
+SARC	SARCOMA	Sarcoma	C47	88043.0
+SARC	SARCOMA	Sarcoma	C49	88043.0
+SARC	SARCOMA	Sarcoma	C49	88053.0
+SARC	SARCOMA	Sarcoma	C49	88063.0
+SARC	SARCOMA	Sarcoma	C40	88103.0
+SARC	SARCOMA	Sarcoma	C49	88111.0
+SARC	SARCOMA	Sarcoma	C49	88113.0
+SARC	SARCOMA	Sarcoma	C49	88151.0
+SARC	SARCOMA	Sarcoma	C38	88153.0
+SARC	SARCOMA	Sarcoma	C49	88153.0
+SARC	SARCOMA	Sarcoma	C40	88253.0
+SARC	SARCOMA	Sarcoma	C49	88253.0
+SARC	SARCOMA	Sarcoma	C40	88303.0
+SARC	SARCOMA	Sarcoma	C49	88303.0
+SARC	SARCOMA	Sarcoma	C49	88323.0
+SARC	SARCOMA	Sarcoma	C49	88333.0
+SARC	SARCOMA	Sarcoma	C40	88403.0
+SARC	SARCOMA	Sarcoma	C49	88403.0
+SARC	SARCOMA	Sarcoma	C49	88501.0
+SARC	SARCOMA	Sarcoma	C48	88503.0
+SARC	SARCOMA	Sarcoma	C49	88503.0
+SARC	SARCOMA	Sarcoma	C48	88513.0
+SARC	SARCOMA	Sarcoma	C49	88513.0
+SARC	SARCOMA	Sarcoma	C49	88523.0
+SARC	SARCOMA	Sarcoma	C48	88543.0
+SARC	SARCOMA	Sarcoma	C49	88543.0
+SARC	SARCOMA	Sarcoma	C49	88573.0
+SARC	SARCOMA	Sarcoma	C48	88583.0
+SARC	SARCOMA	Sarcoma	C49	88583.0
+SARC	SARCOMA	Sarcoma	C40	88903.0
+SARC	SARCOMA	Sarcoma	C41	88903.0
+SARC	SARCOMA	Sarcoma	C48	88903.0
+SARC	SARCOMA	Sarcoma	C49	88903.0
+SARC	SARCOMA	Sarcoma	C48	88906.0
+SARC	SARCOMA	Sarcoma	C49	89003.0
+SARC	SARCOMA	Sarcoma	C49	89013.0
+SARC	SARCOMA	Sarcoma	C49	89203.0
+SARC	SARCOMA	Sarcoma	C48	89313.0
+SARC	SARCOMA	Sarcoma	C49	89823.0
+SARC	SARCOMA	Sarcoma	C47	90403.0
+SARC	SARCOMA	Sarcoma	C49	90403.0
+SARC	SARCOMA	Sarcoma	C49	90413.0
+SARC	SARCOMA	Sarcoma	C49	90433.0
+SARC	SARCOMA	Sarcoma	C49	90443.0
+SARC	SARCOMA	Sarcoma	C41	91203.0
+SARC	SARCOMA	Sarcoma	C49	91203.0
+SARC	SARCOMA	Sarcoma	C40	91803.0
+SARC	SARCOMA	Sarcoma	C41	91803.0
+SARC	SARCOMA	Sarcoma	C49	91803.0
+SARC	SARCOMA	Sarcoma	C40	91813.0
+SARC	SARCOMA	Sarcoma	C40	91823.0
+SARC	SARCOMA	Sarcoma	C40	91833.0
+SARC	SARCOMA	Sarcoma	C40	91863.0
+SARC	SARCOMA	Sarcoma	C40	91923.0
+SARC	SARCOMA	Sarcoma	C40	91933.0
+SARC	SARCOMA	Sarcoma	C40	91943.0
+SARC	SARCOMA	Sarcoma	C40	92203.0
+SARC	SARCOMA	Sarcoma	C41	92203.0
+SARC	SARCOMA	Sarcoma	C49	92203.0
+SARC	SARCOMA	Sarcoma	C40	92213.0
+SARC	SARCOMA	Sarcoma	C41	92213.0
+SARC	SARCOMA	Sarcoma	C40	92221.0
+SARC	SARCOMA	Sarcoma	C41	92221.0
+SARC	SARCOMA	Sarcoma	C40	92313.0
+SARC	SARCOMA	Sarcoma	C41	92313.0
+SARC	SARCOMA	Sarcoma	C49	92313.0
+SARC	SARCOMA	Sarcoma	C40	92403.0
+SARC	SARCOMA	Sarcoma	C41	92403.0
+SARC	SARCOMA	Sarcoma	C49	92403.0
+SARC	SARCOMA	Sarcoma	C40	92423.0
+SARC	SARCOMA	Sarcoma	C41	92423.0
+SARC	SARCOMA	Sarcoma	C40	92433.0
+SARC	SARCOMA	Sarcoma	C41	92433.0
+SARC	SARCOMA	Sarcoma	C49	92433.0
+SARC	SARCOMA	Sarcoma	C40	92503.0
+SARC	SARCOMA	Sarcoma	C49	92523.0
+SARC	SARCOMA	Sarcoma	C40	92603.0
+SARC	SARCOMA	Sarcoma	C41	92603.0
+SARC	SARCOMA	Sarcoma	C49	92603.0
+SARC	SARCOMA	Sarcoma	C40	92613.0
+SARC	SARCOMA	Sarcoma	C40	93103.0
+SARC	SARCOMA	Sarcoma	C40	93643.0
+SARC	SARCOMA	Sarcoma	C41	93643.0
+SARC	SARCOMA	Sarcoma	C49	93643.0
+SARC	SARCOMA	Sarcoma	C41	93703.0
+SARC	SARCOMA	Sarcoma	C41	93713.0
+SARC	SARCOMA	Sarcoma	C49	93713.0
+SARC	SARCOMA	Sarcoma	C47	94903.0
+SARC	SARCOMA	Sarcoma	C47	95403.0
+SARC	SARCOMA	Sarcoma	C49	95403.0
+SARC	SARCOMA	Sarcoma	C47	95613.0
+SARC	SARCOMA	Sarcoma	C49	95613.0
+SARC	SARCOMA	Sarcoma	C49	95813.0
+SARC	SARCOMA	Sarcoma	C41	96803.0
+SARC	SARCOMA	Sarcoma	C49	96803.0
+SARC	SARCOMA	Sarcoma	C49	96913.0
+SARC	SARCOMA	Sarcoma	C41	97313.0
+SARC	SARCOMA	Sarcoma	C49	97573.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C43	87203.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87203.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87206.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C43	87213.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87213.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87422.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87423.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87432.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C43	87433.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87433.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C43	87443.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87443.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87453.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87713.0
+SKCM	MALIGNANT_MELANOMA	Skin Cutaneous Melanoma	C44	87723.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	80463.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	81403.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	81443.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	82633.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	84803.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	84903.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	88003.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	88503.0
+SMIN	UPPER_GASTROINTESTINAL	Small Intestine Neoplasm	C17	88903.0
+STAD	UPPER_GASTROINTESTINAL	Stomach adenocarcinoma	C16	81403.0
+STAD	UPPER_GASTROINTESTINAL	Stomach adenocarcinoma	C16	81443.0
+STAD	UPPER_GASTROINTESTINAL	Stomach adenocarcinoma	C16	82553.0
+STAD	UPPER_GASTROINTESTINAL	Stomach adenocarcinoma	C16	83233.0
+STAD	UPPER_GASTROINTESTINAL	Stomach adenocarcinoma	C16	84903.0
+STAD	UPPER_GASTROINTESTINAL	Stomach adenocarcinoma	C26	84903.0
+STO	UPPER_GASTROINTESTINAL	Stomach other	C16	81453.0
+STO	UPPER_GASTROINTESTINAL	Stomach other	C16	88903.0
+TGCT	TESTICULAR_GERM_CELL_TUMOURS	Testicular Germ Cell Tumors	C62	90613.0
+TGCT	TESTICULAR_GERM_CELL_TUMOURS	Testicular Germ Cell Tumors	C62	90653.0
+TGCT	TESTICULAR_GERM_CELL_TUMOURS	Testicular Germ Cell Tumors	C62	90703.0
+TGCT	TESTICULAR_GERM_CELL_TUMOURS	Testicular Germ Cell Tumors	C62	90813.0
+TGCT	TESTICULAR_GERM_CELL_TUMOURS	Testicular Germ Cell Tumors	C62	90853.0
+TEST	TESTICULAR_GERM_CELL_TUMOURS	Testicular other	C63	88583.0
+TEST	TESTICULAR_GERM_CELL_TUMOURS	Testicular other	C63	88903.0
+TEST	TESTICULAR_GERM_CELL_TUMOURS	Testicular other	C62	89103.0
+TEST	TESTICULAR_GERM_CELL_TUMOURS	Testicular other	C62	96803.0
+THYM	LUNG	Thymoma	C37	80703.0
+THYM	LUNG	Thymoma	C37	85801.0
+THYM	LUNG	Thymoma	C37	85803.0
+THYM	LUNG	Thymoma	C37	85813.0
+THYM	LUNG	Thymoma	C37	85821.0
+THYM	LUNG	Thymoma	C37	85823.0
+THYM	LUNG	Thymoma	C37	85833.0
+THYM	LUNG	Thymoma	C37	85853.0
+THCA	ENDOCRINE	Thyroid carcinoma	C74	80003.0
+THCA	ENDOCRINE	Thyroid carcinoma	C73	81403.0
+THCA	ENDOCRINE	Thyroid carcinoma	C73	82603.0
+THCA	ENDOCRINE	Thyroid carcinoma	C73	82903.0
+THCA	ENDOCRINE	Thyroid carcinoma	C73	83303.0
+THCA	ENDOCRINE	Thyroid carcinoma	C73	83353.0
+THCA	ENDOCRINE	Thyroid carcinoma	C73	83443.0
+THCA	ENDOCRINE	Thyroid carcinoma	C74	83703.0
+THCA	ENDOCRINE	Thyroid carcinoma	C73	85103.0
+THCA	ENDOCRINE	Thyroid carcinoma	C74	87003.0
+THCA	ENDOCRINE	Thyroid carcinoma	C74	94903.0
+THCA	ENDOCRINE	Thyroid carcinoma	C74	95003.0
+UCEC	ENDOMETRIAL_CARCINOMA	Uterine Corpus Endometrial Carcinoma	C53	83843.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	80103.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C53	80703.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	80703.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C53	80772.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	80843.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C53	81403.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C53	83103.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	83802.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C55	88003.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	88013.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	88903.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C55	88903.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	88913.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	88971.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	89003.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	89333.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C55	89333.0
+UTE	ENDOMETRIAL_CARCINOMA	Uterine other	C54	91103.0
+UVM	MALIGNANT_MELANOMA	Uveal Melanoma	C69	87203.0
+UVM	MALIGNANT_MELANOMA	Uveal Melanoma	C69	87703.0
+UVM	MALIGNANT_MELANOMA	Uveal Melanoma	C69	87743.0
+			T02	80103.0
+			T68	80103.0
+			C76	80203.0
+			C60	80703.0
+			T28	80703.0
+			T53	80703.0
+			TYY	80703.0
+			T01	80903.0
+			T74	81301.0
+			T28	81403.0
+			T62	81403.0
+			T67	81403.0
+			T68	81403.0
+			T77	81403.0
+			C42	81406.0
+			C64	82551.0
+			T96	82603.0
+			T71	83103.0
+			T71	83123.0
+			T71	83173.0
+			T04	84013.0
+			T04	84803.0
+			T68	84803.0
+			T04	85003.0
+			T04	85203.0
+			C56	86223.0
+			C51	87203.0
+			T02	87203.0
+			TXX	87203.0
+			T02	87213.0
+			C51	87433.0
+			T02	87433.0
+			T02	88003.0
+			T03	88013.0
+			T11	88013.0
+			TY8	88013.0
+			T03	88023.0
+			TY2	88113.0
+			TY4	88153.0
+			T1X	88403.0
+			T13	88503.0
+			TY9	88523.0
+			T03	88543.0
+			T81	88903.0
+			T82	88903.0
+			T03	90403.0
+			T03	90443.0
+			T03	91303.0
+			T11	91803.0
+			T11	91823.0
+			T11	91923.0
+			T11	91933.0
+			T10	92203.0
+			T11	92203.0
+			T11	92403.0
+			T03	92603.0
+			C76	93643.0
+			TX2	93823.0
+			TX2	94003.0
+			TX2	94513.0
+			TY8	94733.0
+			C76	95003.0
+			TX1	95300.0
+			T03	95403.0
+			T08	95913.0
+			T08	96803.0
+			C26	96873.0
+			T08	96993.0
+			T06	97323.0
+			T06	98233.0
+			T06	98603.0
+			T06	98633.0
+			T06	98753.0
+			T06	98933.0
+			D45	99501.0
+			D47	99601.0
+			T06	99601.0
+			T06	99603.0
+			D47	99621.0
