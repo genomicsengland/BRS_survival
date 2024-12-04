@@ -71,17 +71,24 @@ class Cohort(object):
 		self.survdat = None
 
 		if participants is not None:
-			if participants == 'all_cancer':
+			if isinstance(participants, str) and participants == 'all_cancer':
 				ca_pids = self.get_cancer_parts(dr=version).participant_id
 				self.custom_pids(
 					pids_lst_file=ca_pids,
 					action='include'
 				)
-			else:
+			elif isinstance(participants, (list, pd.Series, str)):
 				self.custom_pids(
 					pids_lst_file=participants,
 					action='include'
 					)
+			else:
+				raise ValueError(
+					'please provide participant_ids as either a list, pd.Series'
+					', path to a tab-delimited, newline seperated file or the string all_cancer.'
+					)
+
+
 		
 		if platekeys is not None:
 			plate_pids = self.get_pids_per_platekey(
