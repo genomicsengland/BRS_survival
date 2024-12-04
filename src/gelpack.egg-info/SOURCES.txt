@@ -3,15 +3,14 @@ MANIFEST.in
 README.md
 pyproject.toml
 src/gelpack/__init__.py
-src/gelpack/add_at_risk_counts.py
 src/gelpack/coding19.tsv
 src/gelpack/cohort.py
 src/gelpack/gel_utils.py
 src/gelpack/gel_vis.py
+src/gelpack/study_abbrv_translations.tsv
 src/gelpack/survival.py
 src/gelpack/workflows.py
 src/gelpack.egg-info/PKG-INFO
 src/gelpack.egg-info/SOURCES.txt
 src/gelpack.egg-info/dependency_links.txt
 src/gelpack.egg-info/top_level.txt
-test/testing.py

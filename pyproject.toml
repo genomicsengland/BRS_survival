@@ -18,7 +18,7 @@ gelpack = ["*.tsv"]
 
 [project]
 name = "gelpack"
-version = "1.0.4"
+version = "1.0.5"
 authors = [
 	{name="Christian Bouwens", email="christian.bouwens@genomicsengland.co.uk"},
 ]
