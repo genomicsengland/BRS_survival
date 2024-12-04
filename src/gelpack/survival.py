@@ -15,7 +15,7 @@ import warnings
 import labkey
 import re
 from functools import reduce
-from gelpack.gel_utils import lab_to_df, translateicd, assign_groups, create_name_map
+from gelpack.gel_utils import lab_to_df, translateicd, clean_icd_table, assign_groups, create_name_map
 import lifelines
 
 
@@ -247,7 +247,11 @@ class Survdat():
 		##
 		query1 =(f'''
 			SELECT 
-				DISTINCT participant_id, diagnosis_date, diagnosis_icd_code
+				DISTINCT 
+					participant_id, 
+					diagnosis_date, 
+					diagnosis_icd_code,
+					morphology_icd_code
 			FROM
 				cancer_participant_tumour
 			WHERE 
@@ -257,21 +261,45 @@ class Survdat():
 			sql_query=query1,
 			dr=self.version
 			)
+		dod_participant = clean_icd_table(
+			df=dod_participant, 
+			icd10_col='diagnosis_icd_code',
+			icdo3_col='morphology_icd_code',
+			joined_col='diag_combined'
+			)
+		
+		dod_participant['study_abbreviation'] = translateicd(
+			dod_participant['diag_combined'],
+			tcga=True
+			)
 		dod_participant['disease_type'] = translateicd(
-			dod_participant['diagnosis_icd_code']
+			dod_participant['diagnosis_icd_code'],
+			tcga=False
 			)
 		dod_participant.sort_values(
 			['diagnosis_date'],
 			ascending=True,
 			inplace=True)
 		dod_participant.drop_duplicates(
-			['participant_id', 'disease_type'],
+			[
+				'participant_id', 
+				'diagnosis_date',
+				'disease_type',
+				'study_abbreviation'
+				],
 			keep='first',
 			inplace=True)
 
+
+		
 		query2=(f'''
 			SELECT 
-				DISTINCT participant_id, diagnosisdatebest, site_icd10_o2
+				DISTINCT 
+				participant_id,
+				diagnosisdatebest,
+				site_icd10_O2_3char,
+				site_coded_3char,
+				histology_coded,
 			FROM
 				av_tumour
 			WHERE
@@ -281,16 +309,55 @@ class Survdat():
 			sql_query=query2,
 			dr=self.version
 			)
-		av_dod_participant['disease_type'] = translateicd(
-			av_dod_participant['site_icd10_o2']
+
+		clean_icd_table(
+			df=av_dod_participant,
+			icd10_col='site_coded_3char',
+			icdo3_col='histology_coded',
+			joined_col='diag_combined'
+		)
+		clean_icd_table(
+			df=av_dod_participant,
+			icd10_col='site_icd10_O2_3char',
+			icdo3_col='histology_coded',
+			joined_col='diag_combined_2'
+		)
+		# for some entries the ICD10 code is best captured in the ICD10_O_2 field of
+		# av_tumour, for others the best fit is the 'site_coded_3char' field.
+		# try both and replace the OTHER cases (where it didn't translate).
+		av_dod_participant['study_abbreviation_icdo3'] = translateicd(
+			av_dod_participant['diag_combined'],
+			tcga=True
 			)
+		av_dod_participant['study_abbreviation_icd10'] = translateicd(
+			av_dod_participant['diag_combined_2'],
+			tcga=True
+			)
+		av_dod_participant['study_abbreviation_icdo3'] = av_dod_participant.apply(
+			lambda row: 
+				row['study_abbreviation_icd10'] if
+					row['study_abbreviation_icdo3'] == 'OTHER' else
+						row['study_abbreviation_icdo3'],
+			axis=1
+		)
+		av_dod_participant.rename(
+			columns={'study_abbreviation_icdo3': 'study_abbreviation'}, 
+			inplace=True
+			)
+		av_dod_participant.drop(columns=['study_abbreviation_icd10'], inplace=True)
+
+		av_dod_participant['disease_type'] = translateicd(
+			av_dod_participant['site_coded_3char'],
+			tcga=False
+			)
+		
 		av_dod_participant = (av_dod_participant
 			.sort_values(
 				['diagnosisdatebest'],
 				ascending=True
 				)
 			.drop_duplicates(
-				['participant_id', 'disease_type'],
+				['participant_id', 'diagnosisdatebest', 'disease_type', 'study_abbreviation'],
 				keep='first'
 				)
 			.rename(
@@ -302,7 +369,12 @@ class Survdat():
 		# Append this based on the data release.
 		query3=(f'''
 			SELECT
-				DISTINCT participant_id, event_date, cancer_site
+				DISTINCT 
+					participant_id, 
+					event_date, 
+					cancer_site, 
+					cancer_type,
+					cancer_behaviour
 			FROM
 				cancer_registry
 			WHERE participant_id IN {*self.pids['custom'],}
@@ -319,8 +391,20 @@ class Survdat():
 			axis=1, 
 			inplace=True
 			)
+		nhsd_dod = clean_icd_table(
+			df=nhsd_dod,
+			icd10_col='cancer_site',
+			icdo3_col='cancer_type',
+			grade_col='cancer_behaviour',
+			joined_col='diag_combined'
+		)
+		nhsd_dod['study_abbreviation'] = translateicd(
+			nhsd_dod['diag_combined'],
+			tcga=True
+			)
 		nhsd_dod['disease_type'] = translateicd(
-			nhsd_dod['cancer_site']
+			nhsd_dod['cancer_site'],
+			tcga=False
 			)
 
 		av_dod_participant_merged = av_dod_participant[[
@@ -334,70 +418,256 @@ class Survdat():
 					'diagnosis_date']],
 				how='outer'
 				)
-
+		av_dod_participant_merged = av_dod_participant[[
+			'participant_id', 
+			'diagnosis_date',
+			'study_abbreviation',
+			'disease_type'
+			]].merge(
+				dod_participant[[
+					'study_abbreviation',
+					'participant_id',
+					'diagnosis_date',
+					'disease_type']],
+				how='outer'
+				)
+		
 		av_nhsd_dod_participant_merged = (
 			av_dod_participant_merged
 			.merge(nhsd_dod[[
-				'disease_type',
+				'study_abbreviation',
 				'participant_id',
 				'diagnosis_date']],
 				how='outer'
 				)
 			.sort_values(['participant_id', 'diagnosis_date'], ascending=True)
-			.drop_duplicates(['participant_id', 'disease_type'], keep='first')
+			.drop_duplicates(['participant_id', 'diagnosis_date','disease_type', 'study_abbreviation'], keep='first')
 			)
 
 		self.dod = av_nhsd_dod_participant_merged
 
-
-	def merge_dod(self):
-		###
-		# merge diagnosis date with pID
-		###
-		### Merging diagnosis date with pID 
-		### (by participant_id and then manually matching disease_type)
-		### disease_type either matching
-		# OR CHILDHOOD / CUP accept any TYPE 
-		# OR if OTHER in translation accepted
-		# this is neccessary as multiple diagnosis may have taken place
-		# and we've grouped childhood/Carcinoma of unknown origin under other.
-		pid_diag = pd.merge(
-			self.ca,
-			self.dod,
-			how='left',
-			on=['participant_id'])
-
-		pid_diag['match'] = np.where(
-			pid_diag['disease_type_x'] == pid_diag['disease_type_y'],
-			1,0
-			)
-		self.pid_diag = (pid_diag
+	def get_earliest_cancer_diagnosis(self):
+		"""
+		Determines the earliest cancer diagnosis for each participant_id.
+		Note: this function is independent of cancer_analysis, but dependend on the
+		date of diagnosis function.
+		
+		Args:
+			diagnosis_table (pd.DataFrame): Table with columns 'participant_id', 'diagnosis_date',
+											'study_abbreviation', and 'disease_type'.
+											
+		Returns:
+			pd.DataFrame: A table with the earliest cancer diagnosis for each participant_id.
+		"""
+		# Convert diagnosis_date to datetime for comparison
+		self.dod['diagnosis_date'] = pd.to_datetime(self.dod['diagnosis_date'])
+		
+		# Find the earliest diagnosis date for each participant_id
+		earliest_diagnosis = (
+			self.dod
 			.sort_values(
-				['participant_id', 'disease_type_x', 'match'],
-				ascending=[True, True, False]
+				[
+					'participant_id', 
+					'diagnosis_date'
+					])
+			.drop_duplicates(
+				subset='participant_id', 
+				keep='first'
 				)
-			.drop_duplicates(['participant_id', 'disease_type_x'])
-			.rename(columns={'disease_type_x':'disease_type'})
-			.loc[
-				(pid_diag['disease_type_x'] == pid_diag['disease_type_y'])
-				| (pid_diag['disease_type_x'].isin(
-					['CHILDHOOD',
-					'CARCINOMA_OF_UNKNOWN_PRIMARY'])
-					)
-				| (pid_diag['disease_type_y'] == 'OTHER')
-			]
-			.drop(['disease_type_y', 'match'],axis=1)
+			.loc[:, [
+				'participant_id', 
+				'diagnosis_date', 
+				'study_abbreviation', 
+				'disease_type'
+				]]
+			.rename(columns={'diagnosis_date': 'earliest_cancer_diagnosis'})
+			.reset_index(drop=True)
 		)
+		
+		self.earliest_diagnosis = earliest_diagnosis
 
-		# which samples have no date of diagnosis?
-		outer_join = self.ca.merge(
-			self.pid_diag,
-			how='left',
-			on=['participant_id', 'disease_type'],
-			indicator=True
+
+	def get_sample_diagnosis_date(self):
+		"""
+		Finds the diagnosis date for a particular tumour_sample_platekey based on the nearest 
+		diagnosis date to the tumour_clinical_sample_time, prioritizing matches by study_abbreviation and disease_type.
+		Captures and returns the participant_ids where we couldn't find a diagnosis date.
+		
+		Args:
+			self.ca (pd.DataFrame): Table with columns 'participant_id', 'tumour_sample_platekey',
+										'tumour_clinical_sample_time', 'study_abbreviation', and 'disease_type'.
+			self.dod (pd.DataFrame): Table with columns 'participant_id', 'diagnosis_date',
+											'study_abbreviation', and 'disease_type'.
+											
+		Returns:
+			self.pid_diag (pd.DataFrame): Samples with matching diagnosis dates, including:
+				- 'participant_id', 'tumour_sample_platekey', 'sample_diagnosis_date', 
+				'earliest_abbrv_dt', 'study_abbreviation', 'disease_type'
+			self.no_diag (pd.DataFrame): Samples where no matching diagnosis date was found, including:
+				- 'participant_id', 'tumour_sample_platekey', 'tumour_clinical_sample_time',
+				'study_abbreviation', 'disease_type'
+		"""
+		# Convert dates to datetime
+		sample_table = self.ca.copy()
+		diagnosis_table = self.dod.copy()
+		sample_table['tumour_clinical_sample_time'] = pd.to_datetime(sample_table['tumour_clinical_sample_time'])
+		diagnosis_table['diagnosis_date'] = pd.to_datetime(diagnosis_table['diagnosis_date'])
+		
+		# Merge the sample and diagnosis tables on participant_id
+		merged = pd.merge(
+			sample_table, 
+			diagnosis_table, 
+			on='participant_id', 
+			how='left', 
+			suffixes=('_sample', '_diagnosis')
+		)
+		merged['time_difference'] = np.abs(
+			(merged['tumour_clinical_sample_time'] - merged['diagnosis_date']).dt.total_seconds()
+		)
+		
+		# Filter matches based on study_abbreviation first, then disease_type
+		merged['match_priority'] = np.where(
+			merged['study_abbreviation_sample'] == merged['study_abbreviation_diagnosis'], 2,
+			np.where(merged['disease_type_sample'] == merged['disease_type_diagnosis'], 1, 0)
+		)
+		
+		# Exclude rows where neither study_abbreviation nor disease_type matches
+		matched = merged[merged['match_priority'] > 0]
+		
+		# Get the nearest diagnosis date based on time_difference and match_priority
+		nearest_diagnosis = (
+			matched
+			.sort_values(
+				[
+					'participant_id', 
+					'tumour_sample_platekey', 
+					'match_priority', 
+					'time_difference'], 
+				ascending=[True, True, False, True]
 			)
-		no_diag = outer_join[~(outer_join._merge == 'both')]
-		self.no_diag = no_diag.drop(['_merge'], axis=1)
+			.drop_duplicates(subset=['tumour_sample_platekey'], keep='first')
+			.rename(columns={'diagnosis_date': 'sample_diagnosis_date'})
+		)
+		
+		# Find the earliest diagnosis date for each study_abbreviation/disease_type
+		earliest_diagnosis_per_group = (
+			matched
+			.sort_values(
+				[
+					'participant_id', 
+					'study_abbreviation_diagnosis', 
+					'disease_type_diagnosis', 
+					'diagnosis_date']
+			)
+			.drop_duplicates(
+				subset=[
+					'participant_id', 
+					'study_abbreviation_diagnosis', 
+					'disease_type_diagnosis'
+					], 
+				keep='first'
+			)
+			.loc[:, [
+				'participant_id', 'study_abbreviation_diagnosis', 
+				'disease_type_diagnosis', 'diagnosis_date'
+			]]
+			.rename(columns={'diagnosis_date': 'earliest_abbrv_dt'})
+		)
+		
+		# Merge the nearest diagnosis with the earliest group diagnosis
+		result = pd.merge(
+			nearest_diagnosis,
+			earliest_diagnosis_per_group,
+			left_on=[
+				'participant_id', 
+				'study_abbreviation_sample', 
+				'disease_type_sample'
+			],
+			right_on=[
+				'participant_id', 
+				'study_abbreviation_diagnosis', 
+				'disease_type_diagnosis'
+			],
+			how='left'
+		)
+		
+		# Fill NaT in earliest_abbrv_dt with sample_diagnosis_date if they are the same
+		result['earliest_abbrv_dt'] = result['earliest_abbrv_dt'].fillna(
+			result['sample_diagnosis_date']
+			)
+		
+		# Keep only relevant columns and rename for clarity
+		result = result.loc[:, [
+			'participant_id', 
+			'tumour_sample_platekey', 
+			'sample_diagnosis_date', 
+			'earliest_abbrv_dt',
+			'study_abbreviation_sample', 
+			'disease_type_sample'
+		]].rename(columns={
+			'study_abbreviation_sample': 'study_abbreviation',
+			'disease_type_sample': 'disease_type'
+		})
+		
+		# Identify unmatched samples
+		matched_platekeys = result['tumour_sample_platekey'].unique()
+		unmatched_samples = sample_table[
+			~sample_table['tumour_sample_platekey'].isin(matched_platekeys)
+		].reset_index(drop=True)
+		
+		self.pid_diag = result
+		self.no_diag = unmatched_samples
+
+
+
+	# def merge_dod(self):
+	# 	###
+	# 	# merge diagnosis date with pID
+	# 	###
+	# 	### Merging diagnosis date with pID 
+	# 	### (by participant_id and then manually matching disease_type)
+	# 	### disease_type either matching
+	# 	# OR CHILDHOOD / CUP accept any TYPE 
+	# 	# OR if OTHER in translation accepted
+	# 	# this is neccessary as multiple diagnosis may have taken place
+	# 	# and we've grouped childhood/Carcinoma of unknown origin under other.
+	# 	pid_diag = pd.merge(
+	# 		self.ca,
+	# 		self.dod,
+	# 		how='left',
+	# 		on=['participant_id'])
+
+	# 	pid_diag['match'] = np.where(
+	# 		pid_diag['disease_type_x'] == pid_diag['disease_type_y'],
+	# 		1,0
+	# 		)
+	# 	self.pid_diag = (pid_diag
+	# 		.sort_values(
+	# 			['participant_id', 'disease_type_x', 'match'],
+	# 			ascending=[True, True, False]
+	# 			)
+	# 		.drop_duplicates(['participant_id', 'disease_type_x'])
+	# 		.rename(columns={'disease_type_x':'disease_type'})
+	# 		.loc[
+	# 			(pid_diag['disease_type_x'] == pid_diag['disease_type_y'])
+	# 			| (pid_diag['disease_type_x'].isin(
+	# 				['CHILDHOOD',
+	# 				'CARCINOMA_OF_UNKNOWN_PRIMARY'])
+	# 				)
+	# 			| (pid_diag['disease_type_y'] == 'OTHER')
+	# 		]
+	# 		.drop(['disease_type_y', 'match'],axis=1)
+	# 	)
+
+	# 	# which samples have no date of diagnosis?
+	# 	outer_join = self.ca.merge(
+	# 		self.pid_diag,
+	# 		how='left',
+	# 		on=['participant_id', 'disease_type'],
+	# 		indicator=True
+	# 		)
+	# 	no_diag = outer_join[~(outer_join._merge == 'both')]
+	# 	self.no_diag = no_diag.drop(['_merge'], axis=1)
 
 
 	def dod_impute(self):
@@ -602,6 +872,9 @@ class Survdat():
 			# 	inplace=True)
 
 	def surv_time(self):
+		"""this function calculates the survival time from the date 
+		of sample diagnosis to the date of last follow up or death.
+		"""
 
 		date_cutoff = pd.to_datetime( 
 			max(self.ons['date_of_death']),
@@ -617,8 +890,19 @@ class Survdat():
 			self.hes, 
 			how='left', 
 			on='participant_id')
+		surv_dat = pd.merge(
+			surv_dat,
+			self.eariest_diagnosis,
+			how='left',
+			on='participant_id')
 
-		for x in ['lastseen', 'date_of_death', 'diagnosis_date']:
+		for x in [
+			'lastseen', 
+			'date_of_death', 
+			'sample_diagnosis_date', 
+			'earliest_abbrv_dt'
+			'earliest_cancer_diagnosis',
+			]:
 			surv_dat[x] = surv_dat[x].apply(
 				pd.to_datetime,
 					format='%Y-%m-%d'
@@ -646,7 +930,7 @@ class Survdat():
 			0 if pd.isnull(x) else 1 for x in surv_dat['date_of_death']
 			]
 		surv_dat['survival'] = (
-			surv_dat['last_date'] - surv_dat['diagnosis_date']
+			surv_dat['last_date'] - surv_dat['sample_diagnosis_date']
 			)
 		# filter out those with a last date before the diagnosis date.
 		# surv_dat = surv_dat.loc[
@@ -661,7 +945,9 @@ class Survdat():
 		surv_data = surv_dat[[
 			'participant_id',
 			'disease_type',
-			'diagnosis_date',
+			'earliest_cncer_diagnosis',
+			'earliest_abbrv_dt',
+			'sample_diagnosis_date',
 			'date_of_death',
 			'last_date',
 			'survival',
@@ -685,7 +971,7 @@ def query_ctd(
 		clinsig (list): list of clinical significance to include. default:
 		'(likely)pathogenic','LoF','path_LoF', excluding 'other'
 	"""
-	from . import force_list
+	from gelpack.gel_utils import force_list
 	genes_list = force_list(genes)
 
 	if len(genes_list) > 1:
@@ -814,7 +1100,10 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 				'''
 				SELECT
 					participant_id,
-					disease_type
+					tumour_sample_platekey,
+					study_abbreviation,
+					disease_type,
+					tumour_clinical_sample_time
 				FROM
 					cancer_analysis
 				''',
@@ -830,7 +1119,9 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 	simp_cohort.quer_ons()  # get survival data : c.ons
 	simp_cohort.quer_hes()  # query HES data for date of last follow up : c.hes
 	simp_cohort.quer_dod()  # get date of diagnosis :c.dod
-	simp_cohort.merge_dod() 
+	simp_cohort.get_earliest_cancer_diagnosis()
+	simp_cohort.get_sample_diagnosis_date()
+	# simp_cohort.merge_dod() 
 	simp_cohort.surv_time()  # use ons, hes, dod and pid_diag for survival data.
 	
 	simp_cohort.age()
@@ -882,244 +1173,244 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 	return simp_cohort, missing_pgroup, survival_data, map_dict
 
 def add_at_risk_counts(
-    *fitters,
-    labels= None,
-    rows_to_show=None,
-    ypos=-0.6,
-    xticks=None,
-    ax=None,
-    at_risk_count_from_start_of_period=False,
-    mask=False,
-    **kwargs,
+	*fitters,
+	labels= None,
+	rows_to_show=None,
+	ypos=-0.6,
+	xticks=None,
+	ax=None,
+	at_risk_count_from_start_of_period=False,
+	mask=False,
+	**kwargs,
 	):
-    """
+	"""
 	--- Fork from Lifelines ---
-    Add counts showing how many individuals were at risk, censored, and observed, at each time point in
-    survival/hazard plots.
+	Add counts showing how many individuals were at risk, censored, and observed, at each time point in
+	survival/hazard plots.
 
-    Tip: you probably want to call ``plt.tight_layout()`` afterwards.
+	Tip: you probably want to call ``plt.tight_layout()`` afterwards.
 
-    Parameters
-    ----------
-    fitters:
-      One or several fitters, for example KaplanMeierFitter, WeibullFitter,
-      NelsonAalenFitter, etc...
-    labels:
-        provide labels for the fitters, default is to use the provided fitter label. Set to
-        False for no labels.
-    rows_to_show: list
-        a sub-list of ['At risk', 'Censored', 'Events']. Default to show all.
-    ypos:
-        make more positive to move the table up.
-    xticks: list
-        specify the time periods (as a list) you want to evaluate the counts at.
-    at_risk_count_from_start_of_period: bool, default False.
-        By default, we use the at-risk count from the end of the period. This is what other packages, and KMunicate suggests, but
-        the same issue keeps coming up with users. #1383, #1316 and discussion #1229. This makes the adjustment.
-    ax:
-        a matplotlib axes
-    mask:
-        mask counts lower than 5 with '<5'
+	Parameters
+	----------
+	fitters:
+	  One or several fitters, for example KaplanMeierFitter, WeibullFitter,
+	  NelsonAalenFitter, etc...
+	labels:
+		provide labels for the fitters, default is to use the provided fitter label. Set to
+		False for no labels.
+	rows_to_show: list
+		a sub-list of ['At risk', 'Censored', 'Events']. Default to show all.
+	ypos:
+		make more positive to move the table up.
+	xticks: list
+		specify the time periods (as a list) you want to evaluate the counts at.
+	at_risk_count_from_start_of_period: bool, default False.
+		By default, we use the at-risk count from the end of the period. This is what other packages, and KMunicate suggests, but
+		the same issue keeps coming up with users. #1383, #1316 and discussion #1229. This makes the adjustment.
+	ax:
+		a matplotlib axes
+	mask:
+		mask counts lower than 5 with '<5'
 
-    Returns
-    --------
-      ax:
-        The axes which was used.
+	Returns
+	--------
+	  ax:
+		The axes which was used.
 
-    Examples
-    --------
-    .. code:: python
+	Examples
+	--------
+	.. code:: python
 
-        # First train some fitters and plot them
-        fig = plt.figure()
-        ax = plt.subplot(111)
+		# First train some fitters and plot them
+		fig = plt.figure()
+		ax = plt.subplot(111)
 
-        f1 = KaplanMeierFitter()
-        f1.fit(data)
-        f1.plot(ax=ax)
+		f1 = KaplanMeierFitter()
+		f1.fit(data)
+		f1.plot(ax=ax)
 
-        f2 = KaplanMeierFitter()
-        f2.fit(data)
-        f2.plot(ax=ax)
+		f2 = KaplanMeierFitter()
+		f2.fit(data)
+		f2.plot(ax=ax)
 
-        # These calls below are equivalent
-        add_at_risk_counts(f1, f2)
-        add_at_risk_counts(f1, f2, ax=ax, fig=fig)
-        plt.tight_layout()
+		# These calls below are equivalent
+		add_at_risk_counts(f1, f2)
+		add_at_risk_counts(f1, f2, ax=ax, fig=fig)
+		plt.tight_layout()
 
-        # This overrides the labels
-        add_at_risk_counts(f1, f2, labels=['fitter one', 'fitter two'])
-        plt.tight_layout()
+		# This overrides the labels
+		add_at_risk_counts(f1, f2, labels=['fitter one', 'fitter two'])
+		plt.tight_layout()
 
-        # This hides the labels
-        add_at_risk_counts(f1, f2, labels=False)
-        plt.tight_layout()
+		# This hides the labels
+		add_at_risk_counts(f1, f2, labels=False)
+		plt.tight_layout()
 
-        # Only show at-risk:
-        add_at_risk_counts(f1, f2, rows_to_show=['At risk'])
-        plt.tight_layout()
+		# Only show at-risk:
+		add_at_risk_counts(f1, f2, rows_to_show=['At risk'])
+		plt.tight_layout()
 
-    References
-    -----------
-     Morris TP, Jarvis CI, Cragg W, et al. Proposals on Kaplan–Meier plots in medical research and a survey of stakeholder views: KMunicate. BMJ Open 2019;9:e030215. doi:10.1136/bmjopen-2019-030215
+	References
+	-----------
+	 Morris TP, Jarvis CI, Cragg W, et al. Proposals on Kaplan–Meier plots in medical research and a survey of stakeholder views: KMunicate. BMJ Open 2019;9:e030215. doi:10.1136/bmjopen-2019-030215
 
-    """
-    
-    from matplotlib import pyplot as plt
-    from lifelines.plotting import move_spines, remove_spines, remove_ticks, is_latex_enabled
-    if ax is None:
-        ax = plt.gca()
-    fig = kwargs.pop("fig", None)
-    if fig is None:
-        fig = plt.gcf()
-    if labels is None:
-        labels = [f._label for f in fitters]
-    elif labels is False:
-        labels = [None] * len(fitters)
-    if rows_to_show is None:
-        rows_to_show = ["At risk", "Censored", "Events"]
-    else:
-        assert all(
-            row in ["At risk", "Censored", "Events"] for row in rows_to_show
-        ), 'must be one of ["At risk", "Censored", "Events"]'
-    n_rows = len(rows_to_show)
+	"""
+	
+	from matplotlib import pyplot as plt
+	from lifelines.plotting import move_spines, remove_spines, remove_ticks, is_latex_enabled
+	if ax is None:
+		ax = plt.gca()
+	fig = kwargs.pop("fig", None)
+	if fig is None:
+		fig = plt.gcf()
+	if labels is None:
+		labels = [f._label for f in fitters]
+	elif labels is False:
+		labels = [None] * len(fitters)
+	if rows_to_show is None:
+		rows_to_show = ["At risk", "Censored", "Events"]
+	else:
+		assert all(
+			row in ["At risk", "Censored", "Events"] for row in rows_to_show
+		), 'must be one of ["At risk", "Censored", "Events"]'
+	n_rows = len(rows_to_show)
 
-    # Create another axes where we can put size ticks
-    ax2 = plt.twiny(ax=ax)
-    # Move the ticks below existing axes
-    # Appropriate length scaled for 6 inches. Adjust for figure size.
-    ax_height = (
-        ax.get_position().y1 - ax.get_position().y0
-    ) * fig.get_figheight()  # axis height
-    ax2_ypos = ypos / ax_height
+	# Create another axes where we can put size ticks
+	ax2 = plt.twiny(ax=ax)
+	# Move the ticks below existing axes
+	# Appropriate length scaled for 6 inches. Adjust for figure size.
+	ax_height = (
+		ax.get_position().y1 - ax.get_position().y0
+	) * fig.get_figheight()  # axis height
+	ax2_ypos = ypos / ax_height
 
-    move_spines(ax2, ["bottom"], [ax2_ypos])
-    # Hide all fluff
-    remove_spines(ax2, ["top", "right", "bottom", "left"])
-    # Set ticks and labels on bottom
-    ax2.xaxis.tick_bottom()
-    # Set limit
-    min_time, max_time = ax.get_xlim()
-    ax2.set_xlim(min_time, max_time)
-    # Set ticks to kwarg or visible ticks
-    if xticks is None:
-        xticks = [xtick for xtick in ax.get_xticks() if min_time <= xtick <= max_time]
-    ax2.set_xticks(xticks)
-    # Remove ticks, need to do this AFTER moving the ticks
-    remove_ticks(ax2, x=True, y=True)
-    
-    ticklabels = []
+	move_spines(ax2, ["bottom"], [ax2_ypos])
+	# Hide all fluff
+	remove_spines(ax2, ["top", "right", "bottom", "left"])
+	# Set ticks and labels on bottom
+	ax2.xaxis.tick_bottom()
+	# Set limit
+	min_time, max_time = ax.get_xlim()
+	ax2.set_xlim(min_time, max_time)
+	# Set ticks to kwarg or visible ticks
+	if xticks is None:
+		xticks = [xtick for xtick in ax.get_xticks() if min_time <= xtick <= max_time]
+	ax2.set_xticks(xticks)
+	# Remove ticks, need to do this AFTER moving the ticks
+	remove_ticks(ax2, x=True, y=True)
+	
+	ticklabels = []
 
-    for tick in ax2.get_xticks():
-        lbl = ""
+	for tick in ax2.get_xticks():
+		lbl = ""
 
-        # Get counts at tick
-        counts = []
-        
-        for f in fitters:
-            # this is a messy:
-            # a) to align with R (and intuition), we do a subtraction off the at_risk column
-            # b) we group by the tick intervals
-            # c) we want to start at 0, so we give it it's own interval
-            if at_risk_count_from_start_of_period:
-                event_table_slice = f.event_table.assign(at_risk=lambda x: x.at_risk)
-            else:
-                event_table_slice = f.event_table.assign(
-                    at_risk=lambda x: x.at_risk - x.removed
-                )
-            if not event_table_slice.loc[:tick].empty:
-                event_table_slice = (
-                    event_table_slice.loc[:tick, ["at_risk", "censored", "observed"]]
-                    .agg(
-                        {
-                            "at_risk": lambda x: x.tail(1).values,
-                            "censored": "sum",
-                            "observed": "sum",
-                        }
-                    )  # see #1385
-                    .rename(
-                        {
-                            "at_risk": "At risk",
-                            "censored": "Censored",
-                            "observed": "Events",
-                        }
-                    )
-                    .fillna(0)
-                )
-                
-                counts.extend([int(c) for c in event_table_slice.loc[rows_to_show]])
-            else:
-                counts.extend([0 for _ in range(n_rows)])
-        if n_rows > 1:
-            if tick == ax2.get_xticks()[0]:
-                max_length = len(str(max(counts)))
-                for i, c in enumerate(counts):
-                    if i % n_rows == 0:
-                        if is_latex_enabled():
-                            lbl += (
-                                ("\n" if i > 0 else "")
-                                + r"\textbf{%s}" % labels[int(i / n_rows)]
-                                + "\n"
-                            )
-                        else:
-                            lbl += (
-                                ("\n" if i > 0 else "")
-                                + r"%s" % labels[int(i / n_rows)]
-                                + "\n"
-                            )
-                    l = rows_to_show[i % n_rows]
-                    s = (
-                        "{}".format(l.rjust(10, " "))
-                        + (" " * (max_length - len(str(c)) + 3))
-                        + "{:>{}}\n".format(
-                            str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
-                    )
-                    lbl += s.format(c)
-            else:
-                # Create tick label
-                lbl += ""
-                for i, c in enumerate(counts):
-                    if i % n_rows == 0 and i > 0:
-                        lbl += "\n\n"
-                    s = "\n{}"
-                    if not mask:
-                        lbl += s.format(c)
-                    else:
-                        lbl +=s.format(c if c >= 5 or c==0 else '<5')
-        else:
-            # if only one row to show, show in "condensed" version
-            if tick == ax2.get_xticks()[0]:
-                max_length = len(str(max(counts)))
+		# Get counts at tick
+		counts = []
+		
+		for f in fitters:
+			# this is a messy:
+			# a) to align with R (and intuition), we do a subtraction off the at_risk column
+			# b) we group by the tick intervals
+			# c) we want to start at 0, so we give it it's own interval
+			if at_risk_count_from_start_of_period:
+				event_table_slice = f.event_table.assign(at_risk=lambda x: x.at_risk)
+			else:
+				event_table_slice = f.event_table.assign(
+					at_risk=lambda x: x.at_risk - x.removed
+				)
+			if not event_table_slice.loc[:tick].empty:
+				event_table_slice = (
+					event_table_slice.loc[:tick, ["at_risk", "censored", "observed"]]
+					.agg(
+						{
+							"at_risk": lambda x: x.tail(1).values,
+							"censored": "sum",
+							"observed": "sum",
+						}
+					)  # see #1385
+					.rename(
+						{
+							"at_risk": "At risk",
+							"censored": "Censored",
+							"observed": "Events",
+						}
+					)
+					.fillna(0)
+				)
+				
+				counts.extend([int(c) for c in event_table_slice.loc[rows_to_show]])
+			else:
+				counts.extend([0 for _ in range(n_rows)])
+		if n_rows > 1:
+			if tick == ax2.get_xticks()[0]:
+				max_length = len(str(max(counts)))
+				for i, c in enumerate(counts):
+					if i % n_rows == 0:
+						if is_latex_enabled():
+							lbl += (
+								("\n" if i > 0 else "")
+								+ r"\textbf{%s}" % labels[int(i / n_rows)]
+								+ "\n"
+							)
+						else:
+							lbl += (
+								("\n" if i > 0 else "")
+								+ r"%s" % labels[int(i / n_rows)]
+								+ "\n"
+							)
+					l = rows_to_show[i % n_rows]
+					s = (
+						"{}".format(l.rjust(10, " "))
+						+ (" " * (max_length - len(str(c)) + 3))
+						+ "{:>{}}\n".format(
+							str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
+					)
+					lbl += s.format(c)
+			else:
+				# Create tick label
+				lbl += ""
+				for i, c in enumerate(counts):
+					if i % n_rows == 0 and i > 0:
+						lbl += "\n\n"
+					s = "\n{}"
+					if not mask:
+						lbl += s.format(c)
+					else:
+						lbl +=s.format(c if c >= 5 or c==0 else '<5')
+		else:
+			# if only one row to show, show in "condensed" version
+			if tick == ax2.get_xticks()[0]:
+				max_length = len(str(max(counts)))
 
-                lbl += rows_to_show[0] + "\n"
+				lbl += rows_to_show[0] + "\n"
 
-                for i, c in enumerate(counts):
-                    s = (
-                        "{}".format(labels[i].rjust(10, " "))
-                        + (" " * (max_length - len(str(c)) + 3))
-                        + "{:>{}}\n".format(
-                            str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
-                    )
-                    lbl += s
+				for i, c in enumerate(counts):
+					s = (
+						"{}".format(labels[i].rjust(10, " "))
+						+ (" " * (max_length - len(str(c)) + 3))
+						+ "{:>{}}\n".format(
+							str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
+					)
+					lbl += s
 
-                    # if not mask:
-                    #     lbl += s.format(c)
-                    # else:
-                    #     lbl +=s.format(c if c >= 5 else '<5')
-            else:
-                # Create tick label
-                lbl += ""
-                for i, c in enumerate(counts):
-                    s = "\n{}"
-                    if not mask:
-                        lbl += s.format(c)
-                    else:
-                        lbl +=s.format(c if c >= 5 or c==0 else '<5')
-        ticklabels.append(lbl)
-    # Align labels to the right so numbers can be compared easily
-    ax2.set_xticklabels(ticklabels, ha="right", **kwargs)
+					# if not mask:
+					#     lbl += s.format(c)
+					# else:
+					#     lbl +=s.format(c if c >= 5 else '<5')
+			else:
+				# Create tick label
+				lbl += ""
+				for i, c in enumerate(counts):
+					s = "\n{}"
+					if not mask:
+						lbl += s.format(c)
+					else:
+						lbl +=s.format(c if c >= 5 or c==0 else '<5')
+		ticklabels.append(lbl)
+	# Align labels to the right so numbers can be compared easily
+	ax2.set_xticklabels(ticklabels, ha="right", **kwargs)
 
-    return ax
+	return ax
 
 def logrank(data, mapping, mult_test='multivariate', weightings=None):
 	"""Calculate a logrank p-value with the lifelines package. distinguishes between
@@ -1564,243 +1855,243 @@ def coxph_regression(survival_df, time_col, event_col, covariates, formula=None)
 
 
 def add_at_risk_counts(
-    *fitters,
-    labels= None,
-    rows_to_show=None,
-    ypos=-0.6,
-    xticks=None,
-    ax=None,
-    at_risk_count_from_start_of_period=False,
-    mask=False,
-    **kwargs,
+	*fitters,
+	labels= None,
+	rows_to_show=None,
+	ypos=-0.6,
+	xticks=None,
+	ax=None,
+	at_risk_count_from_start_of_period=False,
+	mask=False,
+	**kwargs,
 ):
-    """
-    Add counts showing how many individuals were at risk, censored, and observed, at each time point in
-    survival/hazard plots.
+	"""
+	Add counts showing how many individuals were at risk, censored, and observed, at each time point in
+	survival/hazard plots.
 
-    Tip: you probably want to call ``plt.tight_layout()`` afterwards.
+	Tip: you probably want to call ``plt.tight_layout()`` afterwards.
 
-    Parameters
-    ----------
-    fitters:
-      One or several fitters, for example KaplanMeierFitter, WeibullFitter,
-      NelsonAalenFitter, etc...
-    labels:
-        provide labels for the fitters, default is to use the provided fitter label. Set to
-        False for no labels.
-    rows_to_show: list
-        a sub-list of ['At risk', 'Censored', 'Events']. Default to show all.
-    ypos:
-        make more positive to move the table up.
-    xticks: list
-        specify the time periods (as a list) you want to evaluate the counts at.
-    at_risk_count_from_start_of_period: bool, default False.
-        By default, we use the at-risk count from the end of the period. This is what other packages, and KMunicate suggests, but
-        the same issue keeps coming up with users. #1383, #1316 and discussion #1229. This makes the adjustment.
-    ax:
-        a matplotlib axes
-    mask:
-        mask counts lower than 5 with '<5'
+	Parameters
+	----------
+	fitters:
+	  One or several fitters, for example KaplanMeierFitter, WeibullFitter,
+	  NelsonAalenFitter, etc...
+	labels:
+		provide labels for the fitters, default is to use the provided fitter label. Set to
+		False for no labels.
+	rows_to_show: list
+		a sub-list of ['At risk', 'Censored', 'Events']. Default to show all.
+	ypos:
+		make more positive to move the table up.
+	xticks: list
+		specify the time periods (as a list) you want to evaluate the counts at.
+	at_risk_count_from_start_of_period: bool, default False.
+		By default, we use the at-risk count from the end of the period. This is what other packages, and KMunicate suggests, but
+		the same issue keeps coming up with users. #1383, #1316 and discussion #1229. This makes the adjustment.
+	ax:
+		a matplotlib axes
+	mask:
+		mask counts lower than 5 with '<5'
 
-    Returns
-    --------
-      ax:
-        The axes which was used.
+	Returns
+	--------
+	  ax:
+		The axes which was used.
 
-    Examples
-    --------
-    .. code:: python
+	Examples
+	--------
+	.. code:: python
 
-        # First train some fitters and plot them
-        fig = plt.figure()
-        ax = plt.subplot(111)
+		# First train some fitters and plot them
+		fig = plt.figure()
+		ax = plt.subplot(111)
 
-        f1 = KaplanMeierFitter()
-        f1.fit(data)
-        f1.plot(ax=ax)
+		f1 = KaplanMeierFitter()
+		f1.fit(data)
+		f1.plot(ax=ax)
 
-        f2 = KaplanMeierFitter()
-        f2.fit(data)
-        f2.plot(ax=ax)
+		f2 = KaplanMeierFitter()
+		f2.fit(data)
+		f2.plot(ax=ax)
 
-        # These calls below are equivalent
-        add_at_risk_counts(f1, f2)
-        add_at_risk_counts(f1, f2, ax=ax, fig=fig)
-        plt.tight_layout()
+		# These calls below are equivalent
+		add_at_risk_counts(f1, f2)
+		add_at_risk_counts(f1, f2, ax=ax, fig=fig)
+		plt.tight_layout()
 
-        # This overrides the labels
-        add_at_risk_counts(f1, f2, labels=['fitter one', 'fitter two'])
-        plt.tight_layout()
+		# This overrides the labels
+		add_at_risk_counts(f1, f2, labels=['fitter one', 'fitter two'])
+		plt.tight_layout()
 
-        # This hides the labels
-        add_at_risk_counts(f1, f2, labels=False)
-        plt.tight_layout()
+		# This hides the labels
+		add_at_risk_counts(f1, f2, labels=False)
+		plt.tight_layout()
 
-        # Only show at-risk:
-        add_at_risk_counts(f1, f2, rows_to_show=['At risk'])
-        plt.tight_layout()
+		# Only show at-risk:
+		add_at_risk_counts(f1, f2, rows_to_show=['At risk'])
+		plt.tight_layout()
 
-    References
-    -----------
-     Morris TP, Jarvis CI, Cragg W, et al. Proposals on Kaplan–Meier plots in medical research and a survey of stakeholder views: KMunicate. BMJ Open 2019;9:e030215. doi:10.1136/bmjopen-2019-030215
+	References
+	-----------
+	 Morris TP, Jarvis CI, Cragg W, et al. Proposals on Kaplan–Meier plots in medical research and a survey of stakeholder views: KMunicate. BMJ Open 2019;9:e030215. doi:10.1136/bmjopen-2019-030215
 
-    """
-    
-    from matplotlib import pyplot as plt
-    from lifelines.plotting import move_spines, remove_spines, remove_ticks, is_latex_enabled
-    if ax is None:
-        ax = plt.gca()
-    fig = kwargs.pop("fig", None)
-    if fig is None:
-        fig = plt.gcf()
-    if labels is None:
-        labels = [f._label for f in fitters]
-    elif labels is False:
-        labels = [None] * len(fitters)
-    if rows_to_show is None:
-        rows_to_show = ["At risk", "Censored", "Events"]
-    else:
-        assert all(
-            row in ["At risk", "Censored", "Events"] for row in rows_to_show
-        ), 'must be one of ["At risk", "Censored", "Events"]'
-    n_rows = len(rows_to_show)
+	"""
+	
+	from matplotlib import pyplot as plt
+	from lifelines.plotting import move_spines, remove_spines, remove_ticks, is_latex_enabled
+	if ax is None:
+		ax = plt.gca()
+	fig = kwargs.pop("fig", None)
+	if fig is None:
+		fig = plt.gcf()
+	if labels is None:
+		labels = [f._label for f in fitters]
+	elif labels is False:
+		labels = [None] * len(fitters)
+	if rows_to_show is None:
+		rows_to_show = ["At risk", "Censored", "Events"]
+	else:
+		assert all(
+			row in ["At risk", "Censored", "Events"] for row in rows_to_show
+		), 'must be one of ["At risk", "Censored", "Events"]'
+	n_rows = len(rows_to_show)
 
-    # Create another axes where we can put size ticks
-    ax2 = plt.twiny(ax=ax)
-    # Move the ticks below existing axes
-    # Appropriate length scaled for 6 inches. Adjust for figure size.
-    ax_height = (
-        ax.get_position().y1 - ax.get_position().y0
-    ) * fig.get_figheight()  # axis height
-    ax2_ypos = ypos / ax_height
+	# Create another axes where we can put size ticks
+	ax2 = plt.twiny(ax=ax)
+	# Move the ticks below existing axes
+	# Appropriate length scaled for 6 inches. Adjust for figure size.
+	ax_height = (
+		ax.get_position().y1 - ax.get_position().y0
+	) * fig.get_figheight()  # axis height
+	ax2_ypos = ypos / ax_height
 
-    move_spines(ax2, ["bottom"], [ax2_ypos])
-    # Hide all fluff
-    remove_spines(ax2, ["top", "right", "bottom", "left"])
-    # Set ticks and labels on bottom
-    ax2.xaxis.tick_bottom()
-    # Set limit
-    min_time, max_time = ax.get_xlim()
-    ax2.set_xlim(min_time, max_time)
-    # Set ticks to kwarg or visible ticks
-    if xticks is None:
-        xticks = [xtick for xtick in ax.get_xticks() if min_time <= xtick <= max_time]
-    ax2.set_xticks(xticks)
-    # Remove ticks, need to do this AFTER moving the ticks
-    remove_ticks(ax2, x=True, y=True)
-    
-    ticklabels = []
+	move_spines(ax2, ["bottom"], [ax2_ypos])
+	# Hide all fluff
+	remove_spines(ax2, ["top", "right", "bottom", "left"])
+	# Set ticks and labels on bottom
+	ax2.xaxis.tick_bottom()
+	# Set limit
+	min_time, max_time = ax.get_xlim()
+	ax2.set_xlim(min_time, max_time)
+	# Set ticks to kwarg or visible ticks
+	if xticks is None:
+		xticks = [xtick for xtick in ax.get_xticks() if min_time <= xtick <= max_time]
+	ax2.set_xticks(xticks)
+	# Remove ticks, need to do this AFTER moving the ticks
+	remove_ticks(ax2, x=True, y=True)
+	
+	ticklabels = []
 
-    for tick in ax2.get_xticks():
-        lbl = ""
+	for tick in ax2.get_xticks():
+		lbl = ""
 
-        # Get counts at tick
-        counts = []
-        
-        for f in fitters:
-            # this is a messy:
-            # a) to align with R (and intuition), we do a subtraction off the at_risk column
-            # b) we group by the tick intervals
-            # c) we want to start at 0, so we give it it's own interval
-            if at_risk_count_from_start_of_period:
-                event_table_slice = f.event_table.assign(at_risk=lambda x: x.at_risk)
-            else:
-                event_table_slice = f.event_table.assign(
-                    at_risk=lambda x: x.at_risk - x.removed
-                )
-            if not event_table_slice.loc[:tick].empty:
-                event_table_slice = (
-                    event_table_slice.loc[:tick, ["at_risk", "censored", "observed"]]
-                    .agg(
-                        {
-                            "at_risk": lambda x: x.tail(1).values,
-                            "censored": "sum",
-                            "observed": "sum",
-                        }
-                    )  # see #1385
-                    .rename(
-                        {
-                            "at_risk": "At risk",
-                            "censored": "Censored",
-                            "observed": "Events",
-                        }
-                    )
-                    .fillna(0)
-                )
-                
-                counts.extend([int(c) for c in event_table_slice.loc[rows_to_show]])
-            else:
-                counts.extend([0 for _ in range(n_rows)])
-        if n_rows > 1:
-            if tick == ax2.get_xticks()[0]:
-                max_length = len(str(max(counts)))
-                for i, c in enumerate(counts):
-                    if i % n_rows == 0:
-                        if is_latex_enabled():
-                            lbl += (
-                                ("\n" if i > 0 else "")
-                                + r"\textbf{%s}" % labels[int(i / n_rows)]
-                                + "\n"
-                            )
-                        else:
-                            lbl += (
-                                ("\n" if i > 0 else "")
-                                + r"%s" % labels[int(i / n_rows)]
-                                + "\n"
-                            )
-                    l = rows_to_show[i % n_rows]
-                    s = (
-                        "{}".format(l.rjust(10, " "))
-                        + (" " * (max_length - len(str(c)) + 3))
-                        + "{:>{}}\n".format(
-                            str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
-                    )
-                    lbl += s.format(c)
-            else:
-                # Create tick label
-                lbl += ""
-                for i, c in enumerate(counts):
-                    if i % n_rows == 0 and i > 0:
-                        lbl += "\n\n"
-                    s = "\n{}"
-                    if not mask:
-                        lbl += s.format(c)
-                    else:
-                        lbl +=s.format(c if c >= 5 or c==0 else '<5')
-        else:
-            # if only one row to show, show in "condensed" version
-            if tick == ax2.get_xticks()[0]:
-                max_length = len(str(max(counts)))
+		# Get counts at tick
+		counts = []
+		
+		for f in fitters:
+			# this is a messy:
+			# a) to align with R (and intuition), we do a subtraction off the at_risk column
+			# b) we group by the tick intervals
+			# c) we want to start at 0, so we give it it's own interval
+			if at_risk_count_from_start_of_period:
+				event_table_slice = f.event_table.assign(at_risk=lambda x: x.at_risk)
+			else:
+				event_table_slice = f.event_table.assign(
+					at_risk=lambda x: x.at_risk - x.removed
+				)
+			if not event_table_slice.loc[:tick].empty:
+				event_table_slice = (
+					event_table_slice.loc[:tick, ["at_risk", "censored", "observed"]]
+					.agg(
+						{
+							"at_risk": lambda x: x.tail(1).values,
+							"censored": "sum",
+							"observed": "sum",
+						}
+					)  # see #1385
+					.rename(
+						{
+							"at_risk": "At risk",
+							"censored": "Censored",
+							"observed": "Events",
+						}
+					)
+					.fillna(0)
+				)
+				
+				counts.extend([int(c) for c in event_table_slice.loc[rows_to_show]])
+			else:
+				counts.extend([0 for _ in range(n_rows)])
+		if n_rows > 1:
+			if tick == ax2.get_xticks()[0]:
+				max_length = len(str(max(counts)))
+				for i, c in enumerate(counts):
+					if i % n_rows == 0:
+						if is_latex_enabled():
+							lbl += (
+								("\n" if i > 0 else "")
+								+ r"\textbf{%s}" % labels[int(i / n_rows)]
+								+ "\n"
+							)
+						else:
+							lbl += (
+								("\n" if i > 0 else "")
+								+ r"%s" % labels[int(i / n_rows)]
+								+ "\n"
+							)
+					l = rows_to_show[i % n_rows]
+					s = (
+						"{}".format(l.rjust(10, " "))
+						+ (" " * (max_length - len(str(c)) + 3))
+						+ "{:>{}}\n".format(
+							str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
+					)
+					lbl += s.format(c)
+			else:
+				# Create tick label
+				lbl += ""
+				for i, c in enumerate(counts):
+					if i % n_rows == 0 and i > 0:
+						lbl += "\n\n"
+					s = "\n{}"
+					if not mask:
+						lbl += s.format(c)
+					else:
+						lbl +=s.format(c if c >= 5 or c==0 else '<5')
+		else:
+			# if only one row to show, show in "condensed" version
+			if tick == ax2.get_xticks()[0]:
+				max_length = len(str(max(counts)))
 
-                lbl += rows_to_show[0] + "\n"
+				lbl += rows_to_show[0] + "\n"
 
-                for i, c in enumerate(counts):
-                    s = (
-                        "{}".format(labels[i].rjust(10, " "))
-                        + (" " * (max_length - len(str(c)) + 3))
-                        + "{:>{}}\n".format(
-                            str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
-                    )
-                    lbl += s
+				for i, c in enumerate(counts):
+					s = (
+						"{}".format(labels[i].rjust(10, " "))
+						+ (" " * (max_length - len(str(c)) + 3))
+						+ "{:>{}}\n".format(
+							str(c) if not mask or c==0 else (str(c) if int(c) >= 5 else '<5'), max_length)
+					)
+					lbl += s
 
-                    # if not mask:
-                    #     lbl += s.format(c)
-                    # else:
-                    #     lbl +=s.format(c if c >= 5 else '<5')
-            else:
-                # Create tick label
-                lbl += ""
-                for i, c in enumerate(counts):
-                    s = "\n{}"
-                    if not mask:
-                        lbl += s.format(c)
-                    else:
-                        lbl +=s.format(c if c >= 5 or c==0 else '<5')
-        ticklabels.append(lbl)
-    # Align labels to the right so numbers can be compared easily
-    ax2.set_xticklabels(ticklabels, ha="right", **kwargs)
+					# if not mask:
+					#     lbl += s.format(c)
+					# else:
+					#     lbl +=s.format(c if c >= 5 else '<5')
+			else:
+				# Create tick label
+				lbl += ""
+				for i, c in enumerate(counts):
+					s = "\n{}"
+					if not mask:
+						lbl += s.format(c)
+					else:
+						lbl +=s.format(c if c >= 5 or c==0 else '<5')
+		ticklabels.append(lbl)
+	# Align labels to the right so numbers can be compared easily
+	ax2.set_xticklabels(ticklabels, ha="right", **kwargs)
 
-    return ax
+	return ax
 
 ######################
 # main
