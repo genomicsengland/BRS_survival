@@ -12,6 +12,7 @@ import numpy as np
 import warnings
 import labkey
 from gelpack.gel_utils import lab_to_df, force_list
+from gelpack.survival import Survdat
 from functools import reduce
 
 
@@ -67,6 +68,7 @@ class Cohort(object):
 		self.name = name
 		self.platekeys = None
 		self.groups = {}  # to assign intra-cohort groups.
+		self.survdat = None
 
 		if participants is not None:
 			if participants == 'all_cancer':
@@ -228,6 +230,21 @@ class Cohort(object):
 		# confirm the id is in the cohort.
 		if [x.eq(id) for x in self.pids.values()][0].any():
 			self.groups[group].append(id)
+
+	def initialize_survdat(self, impute=False,df=None):
+		"""
+		Lazily initialize the Survdat object when all necessary data is available.
+		"""
+		self.concat_all()
+
+		if not len(self.all_pids)>0:
+			raise ValueError("PIDs must be set before initializing Survdat.")
+		
+		self.survdat = Survdat(
+			df=df,
+			pids=self.all_pids,
+			version=self.version,
+			impute=impute)
 
 
 	def get_cancer_parts(cls, dr):

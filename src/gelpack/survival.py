@@ -4,12 +4,9 @@
 #### BRS team
 #### generate Kaplann-meier survival curves on domain variants and
 #### disease types.
-#### last update: 2023.06.30
+#### last update: 2024.12.04
 
 #########################
-'''TODO
-- add coxPH.
-'''
 import argparse
 import numpy as np
 from pathlib import Path
@@ -20,7 +17,7 @@ import re
 from functools import reduce
 from gelpack.gel_utils import lab_to_df, translateicd, assign_groups, create_name_map
 import lifelines
-from gelpack.cohort import Cohort
+
 
 
 
@@ -88,7 +85,7 @@ def argparser():
 	return options
 
 
-class Survdat(Cohort):
+class Survdat():
 	
 	def __init__(self, df, pids, version, impute):
 
