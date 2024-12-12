@@ -531,19 +531,24 @@ class Cohort(object):
 		# not using if limit in ['all', 'hes'] to allow different combination of sources.
 		if any(lim in ['all','hes'] for lim in limit):
 			hes_tables=[
-				('apc'),
-				('ae'),
-				('op')
+				('apc', 'disdate'),
+				('ae','arrivaldate'),
+				('op','apptdate')
 				]
 
 			# writing a query for the various HES tables.
 			# the replace step is uneccessary - 
 			# a carry over from the different table names for diagnosis fields.
 			# mutliple ICD10 codes possible; therefore the join.
+			# apc = disdate
+			# ae = arrivaldate
+			# op = apptdate
+
 			query = (f'''
 				SELECT 
 					DISTINCT x.participant_id, 
-					diag_all 
+					diag_all,
+					y AS date
 				FROM 
 					hes_x as x 
 				WHERE
@@ -551,9 +556,10 @@ class Cohort(object):
 						" OR diag_all LIKE ".join(f"'%{i}%'" for i in self.icd10s)}''')  # nested f string awh yeah.
 
 			q_apc, q_ae, q_op = [
-				query.replace('x',i) for i in hes_tables
+				query
+				.replace('x', i[0])
+				.replace('y', i[1]) for i in hes_tables
 				]
-
 			apc_icd10 = lab_to_df(
 				sql_query=q_apc,
 				dr=self.version
@@ -570,6 +576,7 @@ class Cohort(object):
 			hes_df_con = pd.concat([apc_icd10, ae_icd10, op_icd10])
 
 			if hes_df_con.size > 0:
+				self.raw_hes_tables = hes_df_con
 				hes_icd10_clean = clean_icd10(hes_df_con, self.icd10s)
 				collect_icd10_tables.append(hes_icd10_clean)
 			else:
@@ -586,13 +593,15 @@ class Cohort(object):
 				(
 					SELECT
 						DISTINCT participant_id,
-						icd10_multiple_cause_all AS diag_all
+						icd10_multiple_cause_all AS diag_all,
+			  			date_of_death AS date
 					FROM
 						mortality
 				)
 				SELECT
 					participant_id,
-					diag_all
+					diag_all,
+			  		date
 				FROM
 					mort
 				WHERE
@@ -854,7 +863,7 @@ class Cohort(object):
 			self.icd10_table = collect_icd10_tables[0]
 			self.pids['icd10'] = collect_icd10_tables[0]['participant_id']
 		else:
-			self.warnings.warn("No participants found with these ICD-10 codes.")
+			warnings.warn("No participants found with these ICD-10 codes.")
 
 
 	################ adding features to the self ##################
