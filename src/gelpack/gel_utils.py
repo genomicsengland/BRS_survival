@@ -371,20 +371,15 @@ def clean_icd_table(
 
 	return df
 
-def tnm_to_stage(t,n,m):
-	if m.str.contains('1'):
-		stage = 4
-	elif n.str.contains(['1','2','3']):
-		stage = 3
-	elif t.str.contains(['3','4']):
-		stage = 2
-	elif (
-		t.str.contains(['1','2',])
-		| t =='Ta'
-		| t == 'a'
-		):
-		stage = 1
-	else:
-		stage = 0
+def tnm_to_stage(t, n, m):
+    stage = pd.Series(0, index=t.index)  # Default stage is 0
+    
+    stage.loc[m.str.contains('1', na=False)] = 4
+    stage.loc[n.str.contains('1|2|3', na=False)] = 3
+    stage.loc[t.str.contains('3|4', na=False)] = 2
+    stage.loc[
+        t.str.contains('1|2', na=False)
+        | t.isin(['Ta', 'a'])
+    ] = 1
 
-	return stage
+    return stage
