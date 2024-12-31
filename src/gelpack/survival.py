@@ -12,15 +12,12 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 import warnings
-import labkey
+# import labkey
 import re
 from functools import reduce
 from gelpack.gel_utils import lab_to_df, translateicd, clean_icd_table, assign_groups, create_name_map
 import lifelines
-
-
-
-
+from s3_helper import *
 
 # this version of pandas is still suffering from the _str_len bug.
 # pd.set_option("display.max_columns", None)
@@ -118,29 +115,38 @@ class Survdat():
 		# that way someone can identify participant ids, and merge it with their grouping.
 		###
 		# import date_of_death per participant_id from 'mortality'
-		query2 = (
-			f'''
-			SELECT 
-				DISTINCT participant_id, death_date
-			FROM
-				death_details
-			WHERE participant_id IN {*self.pids['custom'],}
-			'''
-		)
-		ons1 = lab_to_df(
-			sql_query=query2,
-			dr=self.version)
-		query3 = (
-			f'''
-			SELECT 
-				participant_id, date_of_death
-			FROM 
-				mortality
-			WHERE participant_id IN {*self.pids['custom'],}
-		''')
-		ons2 = lab_to_df(
-			sql_query=query3,
-			dr=self.version)
+		# query2 = (
+		# 	f'''
+		# 	SELECT 
+		# 		DISTINCT participant_id, death_date
+		# 	FROM
+		# 		death_details
+		# 	WHERE participant_id IN {*self.pids['custom'],}
+		# 	'''
+		# )
+		death_details_path = 'RESEARCH_ENVIRONMENT_1/RR19/100K_GEL_Common_CombinedDeathDetails/2024/06/12/100K_GEL_Common_CombinedDeathDetails/data.tsv'
+		d = read_tsv_from_rdl(death_details_path)
+		ons1 = d[d['participant_id'].isin(self.pids['custom'])][['participant_id', 'death_date']].drop_duplicates()
+
+		# ons1 = lab_to_df(
+		# 	sql_query=query2,
+		# 	dr=self.version)
+
+		# query3 = (
+		# 	f'''
+		# 	SELECT 
+		# 		participant_id, date_of_death
+		# 	FROM 
+		# 		mortality
+		# 	WHERE participant_id IN {*self.pids['custom'],}
+		# ''')
+		# ons2 = lab_to_df(
+		# 	sql_query=query3,
+		# 	dr=self.version)
+
+		mortality_path = 'RESEARCH_ENVIRONMENT_1/RR19/100K_NHSD_ONS_Mortality/2024/03/03/100K_NHSD_ONS_Mortality/data.tsv'
+		m = read_tsv_from_rdl(mortality_path)
+		ons2 = m[m['participant_id'].isin(self.pids['custom'])][['participant_id', 'date_of_death']]
 
 		ons1.rename(columns={'death_date':'date_of_death'}, inplace=True)
 		ons = ons1.merge(ons2, how='outer')
@@ -157,7 +163,7 @@ class Survdat():
 		self.ons = ons
 
 
-	def quer_hes(self):
+	def quer_hes(self, sample=False):
 		"""Extract the date of last follow up from hospital episode statitsics
 			labkey tables for a set of participant_id.
 
@@ -172,46 +178,53 @@ class Survdat():
 		# determine date of last follow up (last time seem)
 		###
 		hes_tables=[
-			('apc','epistart'),
-			('ae','arrivaldate'), 
-			('op','apptdate'), 
-			('cc','ccdisdate')
+			('RESEARCH_ENVIRONMENT_1/RR19/100K_NHSD_HES_APC/2024/03/03/100K_NHSD_HES_APC/data.tsv','epistart'),
+			('RESEARCH_ENVIRONMENT_1/RR19/100K_NHSD_HES_AE/2023/12/11/100K_NHSD_HES_AE/data.tsv','arrivaldate'), 
+			('RESEARCH_ENVIRONMENT_1/RR19/100K_NHSD_HES_OP/2024/03/03/100K_NHSD_HES_OP/data.tsv','apptdate'), 
+			('RESEARCH_ENVIRONMENT_1/RR19/100K_NHSD_HES_CC/2024/03/03/100K_NHSD_HES_CC/data.tsv','ccdisdate')
 			]
-		# WHERE x.participant_id IN {*self.pids,}
-		query = (f'''
-		SELECT 
-			x.participant_id, MAX(x.y) AS LastSeen 
-		FROM 
-			hes_x as x 
-		GROUP BY x.participant_id 
-		''')
+		
+		# query = (f'''
+		# SELECT 
+		# 	x.participant_id, MAX(x.y) AS LastSeen 
+		# FROM 
+		# 	hes_x as x 
+		# GROUP BY x.participant_id 
+		# ''')
 		# replacing x and y with matched hes data and column name in.
-		q_apc, q_ae, q_op, q_cc = [
-			query.replace('x',i[0]).replace('y' ,i[1]) for i in hes_tables
-			]
+		# q_apc, q_ae, q_op, q_cc = [
+		# 	query.replace('x',i[0]).replace('y' ,i[1]) for i in hes_tables
+		# 	]
 
+		dfs = [
+			read_tsv_from_rdl(i[0], sample=sample)
+			.loc[read_tsv_from_rdl(i[0], sample=sample)['participant_id'].isin(self.pids['custom'])]  # Filter participants
+			.assign(**{i[1]: lambda df: pd.to_datetime(df[i[1]], errors='coerce')})  # Convert to datetime
+			.groupby('participant_id')[i[1]].max()  # Group by participant_id and get max date
+			.reset_index()  # Reset the index
+			for i in hes_tables
+		]
+		# apc_lastseen = lab_to_df(
+		# 	sql_query=q_apc,
+		# 	dr=self.version
+		# 	)
 
-		apc_lastseen = lab_to_df(
-			sql_query=q_apc,
-			dr=self.version
-			)
+		# ae_lastseen= lab_to_df(
+		# 	sql_query=q_ae,
+		# 	dr=self.version
+		# 	)
 
-		ae_lastseen= lab_to_df(
-			sql_query=q_ae,
-			dr=self.version
-			)
+		# op_lastseen= lab_to_df(
+		# 	sql_query=q_op,
+		# 	dr=self.version
+		# 	)
 
-		op_lastseen= lab_to_df(
-			sql_query=q_op,
-			dr=self.version
-			)
+		# cc_lastseen= lab_to_df(
+		# 	sql_query=q_cc,
+		# 	dr=self.version
+		# 	)
 
-		cc_lastseen= lab_to_df(
-			sql_query=q_cc,
-			dr=self.version
-			)
-
-		dfs = [apc_lastseen, ae_lastseen, op_lastseen, cc_lastseen]
+		# dfs = [apc_lastseen, ae_lastseen, op_lastseen, cc_lastseen]
 		suffix = ('_apc', '_ae', '_op', '_cc')
 		for i,df in enumerate(dfs):
 			df.rename({'LastSeen':'LastSeen'+suffix[i]}, inplace=True, axis=1)
@@ -245,22 +258,26 @@ class Survdat():
 		###
 		# determine date of diagnosis
 		##
-		query1 =(f'''
-			SELECT 
-				DISTINCT 
-					participant_id, 
-					diagnosis_date, 
-					diagnosis_icd_code,
-					morphology_icd_code
-			FROM
-				cancer_participant_tumour
-			WHERE 
-				participant_id IN {*self.pids['custom'],}
-		''')
-		dod_participant = lab_to_df(
-			sql_query=query1,
-			dr=self.version
-			)
+		# query1 =(f'''
+		# 	SELECT 
+		# 		DISTINCT 
+		# 			participant_id, 
+		# 			diagnosis_date, 
+		# 			diagnosis_icd_code,
+		# 			morphology_icd_code
+		# 	FROM
+		# 		cancer_participant_tumour
+		# 	WHERE 
+		# 		participant_id IN {*self.pids['custom'],}
+		# ''')
+		dod_path = 'RESEARCH_ENVIRONMENT_1/RR19/100K_GEL_Cancer_Tumour/2024/06/12/100K_GEL_Cancer_Tumour/data.tsv'
+		dod = read_tsv_from_rdl(dod_path)
+		dod_participant = dod[dod['participant_id'].isin(self.pids['custom'])][['participant_id', 'diagnosis_date', 'diagnosis_icd_code', 'morphology_icd_code']].drop_duplicates()
+
+		# dod_participant = lab_to_df(
+		# 	sql_query=query1,
+		# 	dr=self.version
+		# 	)
 		dod_participant = clean_icd_table(
 			df=dod_participant, 
 			icd10_col='diagnosis_icd_code',
@@ -292,23 +309,26 @@ class Survdat():
 
 
 		
-		query2=(f'''
-			SELECT 
-				DISTINCT 
-				participant_id,
-				diagnosisdatebest,
-				site_icd10_O2_3char,
-				site_coded_3char,
-				histology_coded,
-			FROM
-				av_tumour
-			WHERE
-				participant_id IN {*self.pids['custom'],}
-		''')
-		av_dod_participant = lab_to_df(
-			sql_query=query2,
-			dr=self.version
-			)
+		# query2=(f'''
+		# 	SELECT 
+		# 		DISTINCT 
+		# 		participant_id,
+		# 		diagnosisdatebest,
+		# 		site_icd10_O2_3char,
+		# 		site_coded_3char,
+		# 		histology_coded,
+		# 	FROM
+		# 		av_tumour
+		# 	WHERE
+		# 		participant_id IN {*self.pids['custom'],}
+		# ''')
+		# av_dod_participant = lab_to_df(
+		# 	sql_query=query2,
+		# 	dr=self.version
+		# 	)
+		av_path = 'RESEARCH_ENVIRONMENT_1/RR19/100K_NCRAS_Tumour/2022/10/13/100K_NCRAS_Tumour/data.tsv'
+		av_dod_participant = read_tsv_from_rdl(av_path)
+		av_dod_participant = av_dod_participant[av_dod_participant['participant_id'].isin(self.pids['custom'])][['participant_id', 'diagnosisdatebest', 'site_icd10_o2_3char', 'site_coded_3char','histology_coded']].drop_duplicates()
 
 		clean_icd_table(
 			df=av_dod_participant,
@@ -318,7 +338,7 @@ class Survdat():
 		)
 		clean_icd_table(
 			df=av_dod_participant,
-			icd10_col='site_icd10_O2_3char',
+			icd10_col='site_icd10_o2_3char',
 			icdo3_col='histology_coded',
 			joined_col='diag_combined_2'
 		)
@@ -367,22 +387,26 @@ class Survdat():
 
 		# add in cancer registry data here:
 		# Append this based on the data release.
-		query3=(f'''
-			SELECT
-				DISTINCT 
-					participant_id, 
-					event_date, 
-					cancer_site, 
-					cancer_type,
-					cancer_behaviour
-			FROM
-				cancer_registry
-			WHERE participant_id IN {*self.pids['custom'],}
-			''')
-		nhsd_dod = lab_to_df(
-			sql_query=query3,
-			dr=self.version
-			)
+		# query3=(f'''
+		# 	SELECT
+		# 		DISTINCT 
+		# 			participant_id, 
+		# 			event_date, 
+		# 			cancer_site, 
+		# 			cancer_type,
+		# 			cancer_behaviour
+		# 	FROM
+		# 		cancer_registry
+		# 	WHERE participant_id IN {*self.pids['custom'],}
+		# 	''')
+		# nhsd_dod = lab_to_df(
+		# 	sql_query=query3,
+		# 	dr=self.version
+		# 	)
+		nhs_dod_path = 'RESEARCH_ENVIRONMENT_1/RR19/100K_NHSD_CancerRegistry/2024/03/03/100K_NHSD_CancerRegistry/data.tsv'
+		nhs_dod = read_tsv_from_rdl(nhs_dod_path)
+		nhsd_dod = nhs_dod[nhs_dod['participant_id'].isin(self.pids['custom'])][['participant_id', 'event_date', 'cancer_site', 'cancer_type','cancer_behaviour']].drop_duplicates()
+
 		# some of the cancer sites are integers - leading to errors in
 		# translateicd
 		nhsd_dod['cancer_site'] = nhsd_dod['cancer_site'].map(str)
@@ -460,7 +484,7 @@ class Survdat():
 			pd.DataFrame: A table with the earliest cancer diagnosis for each participant_id.
 		"""
 		# Convert diagnosis_date to datetime for comparison
-		self.dod['diagnosis_date'] = pd.to_datetime(self.dod['diagnosis_date'])
+		self.dod['diagnosis_date'] = pd.to_datetime(self.dod['diagnosis_date'], format='mixed')
 		
 		# Find the earliest diagnosis date for each participant_id
 		earliest_diagnosis = (
@@ -892,15 +916,15 @@ class Survdat():
 			on='participant_id')
 		surv_dat = pd.merge(
 			surv_dat,
-			self.eariest_diagnosis,
+			self.earliest_diagnosis,
 			how='left',
-			on='participant_id')
+			on=['participant_id','study_abbreviation','disease_type'])
 
 		for x in [
 			'lastseen', 
 			'date_of_death', 
 			'sample_diagnosis_date', 
-			'earliest_abbrv_dt'
+			'earliest_abbrv_dt',
 			'earliest_cancer_diagnosis',
 			]:
 			surv_dat[x] = surv_dat[x].apply(
@@ -945,7 +969,7 @@ class Survdat():
 		surv_data = surv_dat[[
 			'participant_id',
 			'disease_type',
-			'earliest_cncer_diagnosis',
+			'earliest_cancer_diagnosis',
 			'earliest_abbrv_dt',
 			'sample_diagnosis_date',
 			'date_of_death',
@@ -2096,102 +2120,108 @@ def add_at_risk_counts(
 ######################
 # main
 ######################
-if __name__ == '__main__':
+# if __name__ == '__main__':
 
-	options = argparser()
+# 	options = argparser()
 
-	if options.out[-1] != '/':
-		options.out=options.out+'/'
-	Path(options.out).mkdir(parents=True, exists_ok=True)
+# 	if options.out[-1] != '/':
+# 		options.out=options.out+'/'
+# 	Path(options.out).mkdir(parents=True, exists_ok=True)
 	
-	# grab all cancer participants to find those with unknown diagnosis dates
-	# or dates of death.
-	if options.disease_type:
-		options.disease_type = [x.upper() for x in options.disease_type]
-		ca_query = (
-			f'''
-			SELECT 
-				participant_id, disease_type
-			FROM
-				lists.cancer_analysis
-			WHERE 
-				tumour_type = 'PRIMARY'
-				AND
-				disease_type IN {*options.disease_type,}
-			''')
-	else:
-		ca_query = (
-			f'''
-			SELECT 
-				participant_id, disease_type
-			FROM
-				lists.cancer_analysis
-			WHERE 
-				tumour_type = 'PRIMARY'
-			''')
+# 	# grab all cancer participants to find those with unknown diagnosis dates
+# 	# or dates of death.
+# 	if options.disease_type:
+# 		options.disease_type = [x.upper() for x in options.disease_type]
+# 		ca_query = (
+# 			f'''
+# 			SELECT 
+# 				participant_id, disease_type
+# 			FROM
+# 				lists.cancer_analysis
+# 			WHERE 
+# 				tumour_type = 'PRIMARY'
+# 				AND
+# 				disease_type IN {*options.disease_type,}
+# 			''')
+# 	else:
+# 		ca_query = (
+# 			f'''
+# 			SELECT 
+# 				participant_id, disease_type
+# 			FROM
+# 				lists.cancer_analysis
+# 			WHERE 
+# 				tumour_type = 'PRIMARY'
+# 			''')
 
-	ca_analysis = lab_to_df(
-		sql_query =ca_query,
-		dr=options.version)
+# 	ca_analysis = lab_to_df(
+# 		sql_query =ca_query,
+# 		dr=options.version)
 
-	c = Survdat(
-		ca_analysis,
-		ca_analysis['participant_id'], 
-		options.version, 
-		options.imputate_flag)
-	c.quer_ons()  # get survival data : c.ons
-	c.quer_hes()  # query HES data for date of last follow up : c.hes
-	c.quer_dod()  # get date of diagnosis :c.dod
-	c.merge_dod()  # match date of diagnosis with cohort: c.pid_diag, c.no_diag
-	# dod_impute only does something if options.imputate_flag is true (--impute)
-	c.dod_impute()  # impute date of diagnosis from average per disease type c.full_diag
-	c.surv_time()  # use ons, hes, dod and pid_diag for survival data.
-	# c.surv_dat will be the ultimate survival table.
+# 	c = Survdat(
+# 		ca_analysis,
+# 		ca_analysis['participant_id'], 
+# 		options.version, 
+# 		options.imputate_flag)
+# 	c.quer_ons()  # get survival data : c.ons 
+# 	c.quer_hes()  # query HES data for date of last follow up : c.hes 
+# 	c.quer_dod()  # get date of diagnosis :c.dod
+
+### >>>>>> DONE UNTIL HERE
+
+# should the merge_dod function be merged?
+# 	c.merge_dod()  # match date of diagnosis with cohort: c.pid_diag, c.no_diag
+# 	# dod_impute only does something if options.imputate_flag is true (--impute)
+# 	c.dod_impute()  # impute date of diagnosis from average per disease type c.full_diag
+
+### DONE this one too 
+# 	c.surv_time()  # use ons, hes, dod and pid_diag for survival data.
+# 	# c.surv_dat will be the ultimate survival table.
 	
-	####################
-	# include SNV data
-	####################
-	# we create strata for multiple genes with assign_groups; full:
-	# BRACA mut, PIK3CA mut
-	# BRACA mut, PIK3CA wt
-	# BRACA wt, PIK3CA mut
-	# BRACA wt, PIK3CA wt
-	surv_dat = query_ctd(  # loading in snvdb can be slow.
-		df = c.surv_dat,
-		version=options.version,
-		genes=options.genes
-		)
+# 	####################
+# 	# include SNV data
+# 	####################
+# 	# we create strata for multiple genes with assign_groups; full:
+# 	# BRACA mut, PIK3CA mut
+# 	# BRACA mut, PIK3CA wt
+# 	# BRACA wt, PIK3CA mut
+# 	# BRACA wt, PIK3CA wt
+# 	surv_dat = query_ctd(  # loading in snvdb can be slow.
+# 		df = c.surv_dat,
+# 		version=options.version,
+# 		genes=options.genes
+# 		)
 
 
-	if not options.strata == 'full':
-		grouped_dat = assign_groups(
-			dataframe=surv_dat, 
-			vars=options.genes, 
-			type=options.strata
-			)
-		map_dict = {'group_1':'Mut','group_2':'WT'}
-	else:
-		grouped_dat, mapping = assign_groups(
-			dataframe=surv_dat, 
-			vars=options.genes, 
-			type=options.strata
-			)
-		map_dict = create_name_map(
-			mapping=mapping,
-			genes=options.genes
-			)
+# 	if not options.strata == 'full':
+# 		grouped_dat = assign_groups(
+# 			dataframe=surv_dat, 
+# 			vars=options.genes, 
+# 			type=options.strata
+# 			)
+# 		map_dict = {'group_1':'Mut','group_2':'WT'}
+# 	else:
+# 		grouped_dat, mapping = assign_groups(
+# 			dataframe=surv_dat, 
+# 			vars=options.genes, 
+# 			type=options.strata
+# 			)
+# 		map_dict = create_name_map(
+# 			mapping=mapping,
+# 			genes=options.genes
+# 			)
 
-	###
-	# calculate KM survival
-	###
-	dat = km_survival(
-		data=grouped_dat,
-		strata=map_dict.values(),
-		map_dict=map_dict,
-		output=options.out,
-		plt_title=options.plttitle,
-		plotting='save'
-		)
+# 	###
+# 	# calculate KM survival
+# 	###
+# 	dat = km_survival(
+# 		data=grouped_dat,
+# 		strata=map_dict.values(),
+# 		map_dict=map_dict,
+# 		output=options.out,
+# 		plt_title=options.plttitle,
+# 		plotting='save'
+# 		)
 
 
 

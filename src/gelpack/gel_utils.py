@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import labkey
+# import labkey
 
 def lab_to_df(sql_query, dr):
 	"""generate an pandas dataframe from labkey sql query
@@ -51,6 +51,11 @@ def lab_to_df(sql_query, dr):
 	return(pd.DataFrame(results['rows']))
 
 
+# def aws_to_df(s3path, sql_query):
+# 	df = read_tsv_from_rdl(s3path)
+# 	result = df.query(sql_query)
+
+# 	return result
 
 def assign_groups(dataframe, vars, type='and'):
 	"""assigns groups/labels for survival analysis based on a list of variables.
