@@ -2,22 +2,48 @@
 #### BRSC team
 #### visualisations
 #### last update: 2023.10.05
-
 def simple_count_plt(
-		table, 
-		x, 
-		ax, 
-		colour_pal=None, 
-		hue=None,
-		mask=False,
-		scale=False):
+	table, 
+	x, 
+	ax, 
+	colour_pal=None, 
+	hue=None,
+	mask=False,
+	scale=False):
 	import seaborn as sns
 	import matplotlib.ticker as mtick
-	from itertools import chain
-	from itertools import repeat
+	from itertools import chain, repeat, cycle
+	import numpy as np
+
+	def adjust_counts(group,scale=scale):
+			# masking hightest column when only 1 column < threshold
+			# Adjust the original data for those hues and add an identifier
+			# Add a column to track adjustments
+			group['adjusted'] = False
+			if group['level_0'].iloc[0] in hue_below_threshold:
+				# Find the index of the row with the highest 'count'
+				max_idx = group['count'].idxmax()
+				# Subtract the threshold from the highest 'count'
+				if scale:
+					group.loc[max_idx, 'count'] -= scale_threshold[group['level_0'].iloc[0]]['threshold']
+				else:
+					group.loc[max_idx, 'count'] -= threshold
+				# Mark the row as adjusted
+				group.loc[max_idx, 'adjusted'] = True
+			# add if else for none hue instances.
+			return group
+	
+	def adjust_counts_without_hue(group):
+			group['adjusted'] = False
+			below_threshold_count = (group['count'] < threshold).sum()
+			if below_threshold_count == 1:
+				max_idx = group['count'].idxmax()
+				group.loc[max_idx, 'count'] -= threshold
+				group.loc[max_idx, 'adjusted'] = True
+			return group
 	
 	threshold = 5
-	
+	# hue is for several cohorts / tables to be visualised at once.
 	if hue:
 		if scale:
 			table_count = (table[hue]
@@ -25,13 +51,57 @@ def simple_count_plt(
 				.value_counts(normalize=True)
 				.reset_index(drop=False, name='count')
 				)
-			scale_threshold = [(5/y) for y in table[hue].groupby(table[x]).size()]
+			# scale_threshold = [(5/y) for y in table[hue].groupby(table[x]).size()]
+			scale_threshold = {i:{'threshold':
+				(5/y)} for i,y in zip(
+					table[hue].groupby(table[x]).size().index,
+					table[hue].groupby(table[x]).size())
+					}  
+			# we'd have to change the downstream handling to deal with a dictionary though
+			
+			# is there a more global way of doing this?
+			# we only use the threshold if mask = True
+			# can we differentiate between scales 
+			# threshold = scale_threshold
 		else:
 			table_count = (table
 				.groupby([hue, x])
 				.size()
 				.reset_index(drop=False, name='count')
 				)
+		# to prevent identification of the number of masked samples ouot of the total
+		# in the case where only one column has been adjusted
+		# remove the threshold from the higest column
+		# and mark the column for addition of a '+' string.
+		## for multiple scale_thresholds (hue=True, scale=True)
+		## we end up with two thesholds. 
+
+		# adjust the hue's largest column and add capture which one was adjusted.
+		if mask:
+			if scale:
+				# maybe do this with an iterrows?
+				for k in  scale_threshold.keys():
+					scale_threshold[k]['count'] = 0
+				for _,row in table_count.iterrows():
+					if row['count'] < scale_threshold[row['level_0']]['threshold']:
+						scale_threshold[row['level_0']]['count'] =+1
+				masked_col_count2 = pd.DataFrame(scale_threshold).transpose()
+				hue_below_threshold = masked_col_count2[masked_col_count2['count'] == 1].index
+				# table_count = table_count.groupby('level_0', group_keys=False).apply(adjust_counts)
+			else:
+				masked_col_count = table_count[
+				table_count['count'] < threshold
+				].groupby('level_0').size()
+				masked_col_count = masked_col_count.reindex(
+					table_count['level_0'].unique(), fill_value=0
+					)
+				# why are we only grabbing the cases where col count is one?
+				# don't we need to mask if multiple columns are below the threshold?
+				hue_below_threshold = masked_col_count[masked_col_count == 1].index
+			
+			table_count = table_count.groupby('level_0', group_keys=False).apply(adjust_counts)
+		else:
+			table_count['adjusted'] = False
 	else:
 		if scale:
 			table_count = (table[x]
@@ -39,11 +109,20 @@ def simple_count_plt(
 				.reset_index(drop=False, name='count')
 				.rename({'index':x},axis=1))
 			scale_threshold = 5/len(table)
+			threshold = scale_threshold
 		else:
 			table_count = (table
 				.value_counts(x)
 				.reset_index(drop=False, name='count'))
-	
+		# this is where we apply the mask.
+		if mask:
+			table_count = adjust_counts_without_hue(table_count)
+		else:
+			table_count['adjusted'] = False
+		# how does the mask = False work?
+		# table count won't have an adjsuted = False.
+
+
 	sns.set_theme(style='whitegrid')
 	sns.barplot(
 		data=table_count,
@@ -58,59 +137,88 @@ def simple_count_plt(
 	# there are 2, sometimes there are 3. 
 	# we have to repeat scale_threshold for the number of bars divided by 
 	# the number of hues.
-	if hue and scale:
-		nbar=len(ax.patches)
-		nhues=len(scale_threshold)
-		rep_scale_thres = list(
-			chain(*(repeat(elem, (nbar//nhues)) for elem in scale_threshold))
+
+	# is this usefull? we somehow need to attach the information of the 
+	# threshold to the bars.
+	if hue:
+		# Use the hue-based logic for matching
+		hue_levels = ax.get_legend_handles_labels()[1]
+		for container, hue_level in zip(
+			ax.containers, 
+			hue_levels, 
+			):
+			
+			# instances where a hue_level only appears in one hue
+			# leads to the downstream_iterrows() to mess up.
+			# we need to expand the subset.
+			subset = table_count[table_count[hue] == hue_level]
+			if len(subset) != len(container):
+				# Calculate the difference in lengths
+				rep = len(container) - len(subset)
+				if subset.empty:
+					# If subset is empty, create a placeholder DataFrame with empty values
+					expanded_subset = pd.DataFrame([{}] * len(container), columns=table_count.columns)
+				else:
+					# If subset is not empty, repeat rows to match the container length
+					expanded_subset = pd.concat([subset] * (rep // len(subset) + 1), ignore_index=True).iloc[:len(container)]
+			else:
+				expanded_subset = subset
+
+			if expanded_subset.empty:
+				labels = [""] * len(container)
+			else:
+				labels = []
+				for bar, (_, row) in zip(container, expanded_subset.iterrows()):
+					height = bar.get_height()
+					if scale & mask: 
+						threshold = scale_threshold[row['level_0']]['threshold']
+					if np.isnan(height):
+						labels.append("")
+					elif (height < threshold) & mask:
+						labels.append("<5")
+					else:
+						if scale:
+							label = f"{height:.2f}"
+						else:
+							label = f"{int(height)}"
+						if row["adjusted"]:
+							label += "+"
+						labels.append(label)
+			ax.bar_label(container, labels=labels, padding=-1, fontsize=8)
+	else:
+		# Non-hue context: simpler approach
+		for i, container in enumerate(ax.containers):
+			labels = []
+			for bar, (_, row) in zip(container, table_count.iterrows()):
+				height = bar.get_height()
+				if np.isnan(height):
+					labels.append("")
+				elif (height < threshold) & (mask):
+					labels.append("<5")
+				else:
+					if scale:
+						label = f"{height:.2f}"
+					else:
+						label = f"{int(height)}"
+					if row["adjusted"]:
+						label += "+"
+					labels.append(label)
+
+			# Apply the labels to the container
+			ax.bar_label(
+				container,
+				labels=labels,
+				padding=-1,
+				fontsize=8
 			)
 
-	for i,bar in enumerate(ax.patches):
-		if mask:
-			if scale:
-				if hue:
-					if bar.get_height() < rep_scale_thres[i]:
-						bar.set_height(h=0)
-				else:
-					if bar.get_height() < scale_threshold:
-						bar.set_height(h=0)
-			else:
-				if bar.get_height() < threshold:
-					bar.set_height(h=0)
-	# adding the numeric values on top of the bars.
-	for i,c in enumerate(ax.containers):
-		if mask:
-			if scale:
-				if hue:
-					labels = [
-						f'{(v):.0%}' if v >= rep_scale_thres[i] or v == 0 else
-						"<5" for v in c.datavalues
-						]
-				else:
-					labels = [
-						f'{(v):.0%}' if v >= scale_threshold or v == 0 else
-						"<5" for v in c.datavalues
-						]
-			else:
-				labels = [v if v >= threshold or v == 0 else
-				"<5" for v in c.datavalues]
-		else:
-			if scale:
-				labels =  [f'{(v):.0%}' for v in c.datavalues]
-			else:
-				labels = [v for v in c.datavalues]
-
-		ax.bar_label(
-			c,
-			labels=labels,
-			fmt='%.1f',
-			padding=-1,
-			fontsize=8)
 	if scale:
 		ax.yaxis.set_major_formatter(mtick.PercentFormatter(1))
 	ax.set_ylabel(None)
 	ax.xaxis.set_label_position('top')
 	ax.margins(.1,0.25)
+
+
 
 
 def simple_hist_plt(
@@ -123,7 +231,7 @@ def simple_hist_plt(
 	mask=False,
 	scale=False,
 	multiple='layer'):
-
+	
 	import seaborn as sns
 	import matplotlib.ticker as mtick
 
@@ -137,7 +245,7 @@ def simple_hist_plt(
 			ax=ax,
 			hue=hue,
 			multiple=multiple
-			)
+		)
 
 	if scale:
 		sns.histplot(
@@ -150,27 +258,46 @@ def simple_hist_plt(
 			stat='percent',
 			common_norm=False,
 			multiple=multiple
-			)
+		)
 		datasize = len(table[x])
 	threshold = 5
-	# mask bars under 5 counts.
+
+	# Count the number of masked bars
+	masked_bar_count = 0
+	for bar in ax.patches:
+		if mask and bar.get_height() < threshold:
+			masked_bar_count += 1
+
+	# Adjust the tallest bar if only one bar is masked
+	if mask and masked_bar_count == 1:
+		# Find the tallest bar and adjust it
+		tallest_bar_index = max(range(len(ax.patches)), key=lambda i: ax.patches[i].get_height())
+		tallest_bar = ax.patches[tallest_bar_index]
+		tallest_bar.set_height(tallest_bar.get_height() - 5)
+
+	# Apply masking logic and add labels
 	for bar in ax.patches:
 		if mask:
 			if bar.get_height() < threshold:
 				bar.set_height(h=0)
 
-	# mask labels under 5 counts
-	for c in ax.containers:
+	for i, c in enumerate(ax.containers):
 		if mask:
 			if scale:
-				labels = [f'{(v/100):.1%}' if v >= threshold or v == 0 else
-				 "<5" for v in c.datavalues]
+				labels = [
+					f'{(v/100):.1%}+' if masked_bar_count == 1 and i == tallest_bar_index else 
+					f'{(v/100):.1%}' if v >= threshold or v == 0 else 
+					"<5" for v in c.datavalues
+				]
 			else:
-				labels = [v if v >= threshold or v == 0 else
-				 "<5" for v in c.datavalues]
+				labels = [
+					f'{v}+' if masked_bar_count == 1 and i == tallest_bar_index else 
+					v if v >= threshold or v == 0 else 
+					"<5" for v in c.datavalues
+				]
 		else:
 			if scale:
-				labels =  [f'{(v/100):.1%}' for v in c.datavalues]
+				labels = [f'{(v/100):.1%}' for v in c.datavalues]
 			else:
 				labels = [v for v in c.datavalues]
 		if col_labels:
@@ -179,13 +306,10 @@ def simple_hist_plt(
 				labels=labels,
 				padding=-1,
 				fontsize=8)
-	# if scale:
-	# 	ax.yaxis.set_major_formatter(mtick.PercentFormatter(datasize))
+
 	ax.set_ylabel(None)
 	ax.xaxis.set_label_position('top') 
-	ax.margins(0,0.25)
-
-
+	ax.margins(0, 0.25)
 
 
 

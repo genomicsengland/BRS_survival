@@ -1473,6 +1473,7 @@ def km_survival(
 	plotting='show',
 	table=True,
 	interval='days',
+	time_lim=None,
 	at_risk_counts=False,
 	weightings=None,
 	mask=True):
@@ -1490,11 +1491,13 @@ def km_survival(
 			in both table and plot output. Note: when included strata should 
 			match the renamed groups.
 		plotting (str, optional): Should the function create a plot: 
-			['show', 'save'], or return the ax: 'None'. Defaults to show.
+			['show', 'save','ax'], or return the ax: 'ax'. Defaults to show.
 		table (bool, optional): should the function save a .csv table. 
 			Defaults to True.
 		interval (str, optional): what time interval should the plot be on?
 			options =['days','months']. Defaults to 'days'.
+		time_lim (slice, optional): limit the KM plot to a start and end point
+		 	example: Slice(0,10) will limit the plot from t=0 to t=10.
 		at_risk_counts (bool, optional): to add summary tables. Defaults to False.
 		weightings (str, optional): Should the logrank p-value be calculated, or
 			alternative tests be used? options are “wilcoxon” for Wilcoxon
@@ -1563,9 +1566,15 @@ def km_survival(
 		# aggfit[g]=fit
 		if plotting is not None: 
 			if col is not None: 
-				aggfit[g].plot_survival_function(color=col[g]).plot(ax=ax)
+				if time_lim is not None:
+					aggfit[g].plot_survival_function(color=col[g], loc=time_lim).plot(ax=ax)
+				else:
+					aggfit[g].plot_survival_function(color=col[g]).plot(ax=ax)
 			else:
-				aggfit[g].plot_survival_function().plot(ax=ax)
+				if time_lim is not None:
+					aggfit[g].plot_survival_function(loc=time_lim).plot(ax=ax)
+				else:
+					aggfit[g].plot_survival_function().plot(ax=ax)
 	# add the stats to the plot:
 	if plotting is not None:
 		if at_risk_counts:
@@ -1598,6 +1607,8 @@ def km_survival(
 		plt.savefig(output+'_kmplot.png', bbox_inches='tight', dpi=300)
 		plt.close()
 		plt.clf()
+	elif plotting == 'ax':
+		return stats, ax
 	else:
 		return stats,aggfit
 	
