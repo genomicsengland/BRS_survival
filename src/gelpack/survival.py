@@ -892,15 +892,18 @@ class Survdat():
 			on='participant_id')
 		surv_dat = pd.merge(
 			surv_dat,
-			self.eariest_diagnosis,
+			self.earliest_diagnosis[[
+				'participant_id',
+				'earliest_cancer_diagnosis'
+				]],
 			how='left',
 			on='participant_id')
-
+		
 		for x in [
 			'lastseen', 
 			'date_of_death', 
-			'sample_diagnosis_date', 
-			'earliest_abbrv_dt'
+			'sample_diagnosis_date',
+			'earliest_abbrv_dt',
 			'earliest_cancer_diagnosis',
 			]:
 			surv_dat[x] = surv_dat[x].apply(
@@ -933,19 +936,19 @@ class Survdat():
 			surv_dat['last_date'] - surv_dat['sample_diagnosis_date']
 			)
 		# filter out those with a last date before the diagnosis date.
-		surv_dat = surv_dat.loc[
-			~(surv_dat['survival'].dt.days <= 0)
-			& ~(surv_dat['survival'].isna())]
+		# surv_dat = surv_dat.loc[
+		# 	~(surv_dat['survival'].dt.days <= 0)
+		# 	& ~(surv_dat['survival'].isna())]
 
 		surv_dat = surv_dat.drop_duplicates([
-			'participant_id', 
+			'participant_id',
 			'disease_type'
 			])
 
 		surv_data = surv_dat[[
 			'participant_id',
 			'disease_type',
-			'earliest_cncer_diagnosis',
+			'earliest_cancer_diagnosis',
 			'earliest_abbrv_dt',
 			'sample_diagnosis_date',
 			'date_of_death',
@@ -1036,6 +1039,7 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 	from itertools import chain
 	from functools import reduce
 	from gelpack.gel_utils import lab_to_df
+	from gelpack.cohort import Cohort
 	import numpy as np
 
 	# from gelpack.survival import Survdat
@@ -1108,61 +1112,56 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 					cancer_analysis
 				''',
 			dr=version)	
-
-	simp_cohort = Survdat(
+		
+	simple_cohort = Cohort(
 		version=version, 
-		pids=all_pids,
-		df=ca_df,
-		impute=False
+		participants=all_pids,
 		)
 
-	simp_cohort.quer_ons()  # get survival data : c.ons
-	simp_cohort.quer_hes()  # query HES data for date of last follow up : c.hes
-	simp_cohort.quer_dod()  # get date of diagnosis :c.dod
-	simp_cohort.get_earliest_cancer_diagnosis()
-	simp_cohort.get_sample_diagnosis_date()
+	simple_cohort.initialize_survdat(df=ca_df)
+	simple_cohort.survdat.quer_ons()  # get survival data : c.ons
+	simple_cohort.survdat.quer_hes()  # query HES data for date of last follow up : c.hes
+	simple_cohort.survdat.quer_dod()  # get date of diagnosis :c.dod
+	simple_cohort.survdat.get_earliest_cancer_diagnosis()
+	simple_cohort.survdat.get_sample_diagnosis_date()
 	# simp_cohort.merge_dod() 
-	simp_cohort.surv_time()  # use ons, hes, dod and pid_diag for survival data.
+	simple_cohort.survdat.surv_time()  # use ons, hes, dod and pid_diag for survival data.
 	
-	simp_cohort.age()
-	simp_cohort.ancestry()
-	simp_cohort.sex()
-
-	# simp_cohort.ca_sample_data()
-	
-	simp_cohort.concat_all()
-
-	
-	# merge the survival data with its features:
+	simple_cohort.age()
+	simple_cohort.ancestry()
+	simple_cohort.sex()
+	simple_cohort.concat_all()
 	all_surv = pd.merge(
-		simp_cohort.surv_dat,
-		simp_cohort.all_data,
-		how='left',
-		on='participant_id'
-	)
-	simp_cohort.group_features = pd.DataFrame({
-		'participant_id':simp_cohort.pids['custom']
+			simple_cohort.survdat.surv_dat,
+			simple_cohort.all_data,
+			how='left',
+			on='participant_id'
+		)
+
+	simple_cohort.group_features = pd.DataFrame({
+		'participant_id':simple_cohort.all_pids
 		})
 	for x in group_names:
-		simp_cohort.group_features[x] = pd.NA
+		simple_cohort.group_features[x] = pd.NA
 	
 	for feat, source in zip(group_names,group_pids):
-		simp_cohort.group_features[feat] = np.where(
-			simp_cohort.group_features['participant_id'].isin(source),
+		simple_cohort.group_features[feat] = np.where(
+			simple_cohort.group_features['participant_id'].isin(source),
 			True,
 			False
 		)
 	groups, mapping = assign_groups(
-		simp_cohort.group_features,
+		simple_cohort.group_features,
 		vars=group_names,
 		type='full')
+	
 	map_dict = create_name_map(mapping, group_names)
 	
 
 	survival_data = pd.merge(groups, all_surv, on = 'participant_id', how='left')
 	# survival_data.dropna()
 	missing_pgroup = pd.concat([
-		survival_data.loc[survival_data['diagnosis_date'].isna(),'group'].value_counts(),
+		survival_data.loc[survival_data['sample_diagnosis_date'].isna(),'group'].value_counts(),
 		survival_data['group'].value_counts()
 		], axis=1)
 	missing_pgroup.columns = ['missing','all']
@@ -1170,7 +1169,8 @@ def cohort_surv(cohorts, ca_df=None, group_pids=None, group_names=None):
 	# sdat = survival_data.dropna()
 	# TODO add a little boxplot that shows how much NA we have for each group
 
-	return simp_cohort, missing_pgroup, survival_data, map_dict
+	return simple_cohort, missing_pgroup, survival_data, map_dict
+
 
 def add_at_risk_counts(
 	*fitters,
@@ -1473,6 +1473,7 @@ def km_survival(
 	plotting='show',
 	table=True,
 	interval='days',
+	time_lim=None,
 	at_risk_counts=False,
 	weightings=None,
 	mask=True):
@@ -1490,11 +1491,13 @@ def km_survival(
 			in both table and plot output. Note: when included strata should 
 			match the renamed groups.
 		plotting (str, optional): Should the function create a plot: 
-			['show', 'save'], or return the ax: 'None'. Defaults to show.
+			['show', 'save','ax'], or return the ax: 'ax'. Defaults to show.
 		table (bool, optional): should the function save a .csv table. 
 			Defaults to True.
 		interval (str, optional): what time interval should the plot be on?
 			options =['days','months']. Defaults to 'days'.
+		time_lim (slice, optional): limit the KM plot to a start and end point
+		 	example: Slice(0,10) will limit the plot from t=0 to t=10.
 		at_risk_counts (bool, optional): to add summary tables. Defaults to False.
 		weightings (str, optional): Should the logrank p-value be calculated, or
 			alternative tests be used? options are “wilcoxon” for Wilcoxon
@@ -1563,9 +1566,15 @@ def km_survival(
 		# aggfit[g]=fit
 		if plotting is not None: 
 			if col is not None: 
-				aggfit[g].plot_survival_function(color=col[g]).plot(ax=ax)
+				if time_lim is not None:
+					aggfit[g].plot_survival_function(color=col[g], loc=time_lim).plot(ax=ax)
+				else:
+					aggfit[g].plot_survival_function(color=col[g]).plot(ax=ax)
 			else:
-				aggfit[g].plot_survival_function().plot(ax=ax)
+				if time_lim is not None:
+					aggfit[g].plot_survival_function(loc=time_lim).plot(ax=ax)
+				else:
+					aggfit[g].plot_survival_function().plot(ax=ax)
 	# add the stats to the plot:
 	if plotting is not None:
 		if at_risk_counts:
@@ -1598,6 +1607,8 @@ def km_survival(
 		plt.savefig(output+'_kmplot.png', bbox_inches='tight', dpi=300)
 		plt.close()
 		plt.clf()
+	elif plotting == 'ax':
+		return stats, ax
 	else:
 		return stats,aggfit
 	
