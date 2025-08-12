@@ -222,7 +222,7 @@ class Survdat():
 			 	participant_id,
 			 	eventdate AS LastSeen
 			FROM
-			 	av_tumour
+			 	av_treatment
 			WHERE participant_id IN {*self.pids['custom'],}
 			''')
 		
