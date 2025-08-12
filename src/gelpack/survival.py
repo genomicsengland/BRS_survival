@@ -216,15 +216,27 @@ class Survdat():
 		for i,df in enumerate(dfs):
 			df.rename({'LastSeen':'LastSeen'+suffix[i]}, inplace=True, axis=1)
 
+		# adding in av_treatment for some edge cases that do not appear in the HES tables.
+		avt_sql = (f'''
+			SELECT
+			 	participant_id,
+			 	eventdate AS LastSeen
+			FROM
+			 	av_tumour
+			WHERE participant_id IN {*self.pids['custom'],}
+			''')
+		
+		av_t = lab_to_df(avt_sql, dr=self.version)
+		dfs.append(av_t)
 		merged_lastseen = reduce(
 			lambda left, right: pd.merge(
 				left, right, on=['participant_id'],
 				how = 'outer'),
 			dfs)
-		merged_lastseen.columns = ['participant_id', 'apc', 'ae', 'op', 'cc']
+		merged_lastseen.columns = ['participant_id', 'apc', 'ae', 'op', 'cc', 'avt']
 
 		# not all are datetimes, which we need in order to select last value.
-		for i in [ 'apc', 'ae', 'op', 'cc']:
+		for i in [ 'apc', 'ae', 'op', 'cc', 'avt']:
 			merged_lastseen[i] = pd.to_datetime(merged_lastseen[i])
 		merged_lastseen = merged_lastseen.loc[
 			merged_lastseen['participant_id'].isin(self.pids['custom'])
@@ -232,7 +244,7 @@ class Survdat():
 
 		hes=pd.DataFrame({
 			'participant_id':merged_lastseen['participant_id'],
-			'lastseen':merged_lastseen[['apc','ae','op','cc']].max(axis=1)})
+			'lastseen':merged_lastseen[['apc','ae','op','cc','avt']].max(axis=1)})
 				
 		# hes=pd.DataFrame({
 		# 	'participant_id':merged_lastseen['participant_id'],
