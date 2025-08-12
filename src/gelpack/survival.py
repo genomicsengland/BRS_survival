@@ -227,7 +227,10 @@ class Survdat():
 			''')
 		
 		av_t = lab_to_df(avt_sql, dr=self.version)
+		av_t.sort_values(by='LastSeen',ascending=False,inplace=True)
+		av_t.drop_duplicates(['participant_id'],keep='first',inplace=True)
 		dfs.append(av_t)
+
 		merged_lastseen = reduce(
 			lambda left, right: pd.merge(
 				left, right, on=['participant_id'],
@@ -245,7 +248,7 @@ class Survdat():
 		hes=pd.DataFrame({
 			'participant_id':merged_lastseen['participant_id'],
 			'lastseen':merged_lastseen[['apc','ae','op','cc','avt']].max(axis=1)})
-				
+
 		# hes=pd.DataFrame({
 		# 	'participant_id':merged_lastseen['participant_id'],
 		# 	'lastseen':merged_lastseen[['apc','ae','cc']].max(axis=1)})
@@ -418,7 +421,7 @@ class Survdat():
 			nhsd_dod['cancer_site'],
 			tcga=False
 			)
-
+		# taking out cancer_participant_tumour as its full of inaccuracies.
 		av_dod_participant_merged = av_dod_participant[[
 			'participant_id', 
 			'diagnosis_date',
