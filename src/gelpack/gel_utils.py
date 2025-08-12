@@ -250,7 +250,7 @@ def translateicd(icd_vec, tcga=False, lookup=None):
 		('HEPATOPANCREATOBILIARY',r"C22[0-9]{0,1}|C23|C24[0-9]{0,1}"
 			r"|C25[0-9]{0,1}|C787|D015|D376"),
 		('LUNG',r"C34[0-9]{0,1}|D022|C450|C459"),
-		('MALIGNANT_MELANOMA',r"C43[0-9]{0,1}|D03[0-9]{0,1}"),
+		('MALIGNANT_MELANOMA',r"C43[0-9]{0,1}|C44[0-9]{0,1}|D03[0-9]{0,1}"),
 		('NASOPHARYNGEAL',r"C11[0-9]{0,1}"),
 		('ORAL_OROPHARYNGEAL',r"C01[0-9]{0,1}|C02[0-9]{0,1}|C03[0-9]{0,1}|C04[0-9]"
 			r"{0,1}|C05[0-9]{0,1}|C06[0-9]{0,1}|C07[0-9]{0,1}|C08[0-9]{0,1}"

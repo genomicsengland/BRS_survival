@@ -1,7 +1,12 @@
 #### Christian J. Bouwens
 #### BRSC team
 #### visualisations
-#### last update: 2023.10.05
+#### last update: 2025.06.06
+import seaborn as sns
+import matplotlib.ticker as mtick
+import numpy as np
+import pandas as pd
+
 def simple_count_plt(
 	table, 
 	x, 
@@ -12,7 +17,6 @@ def simple_count_plt(
 	scale=False):
 	import seaborn as sns
 	import matplotlib.ticker as mtick
-	from itertools import chain, repeat, cycle
 	import numpy as np
 
 	def adjust_counts(group,scale=scale):
