@@ -43,7 +43,7 @@ class BaseLoader(ABC):
 			likes=None,
 			**params
 			):
-		"""smart fetch 
+		"""smart fetch data
 		- if key_or_spec matches a template in self.queries ( the pre-fitted SQL queries accompanying the package) render
 		placeholders using params and optional LIKE chains from 'likes', then execute the query/grab.
 		- otherwise treat key_or_spec as a raw backend spec and execute it.
@@ -114,3 +114,57 @@ class BaseLoader(ABC):
 
 		spec = template.format(**fmt)
 		return self._execute(spec)
+	
+	# adding in some helpers for Cohort and Survdat,
+	# these are not used for general querying.
+	# essentially, these are inert unless the template uses them.
+
+	@staticmethod
+	def _format_in_clause(items):
+		# deduplicate, create a string and safely quote.
+		uniq = list(dict.fromkeys(str(x) for x in items))
+		if not uniq:
+			return "(NULL)"
+		quoted = ", ".join("'"+s.replace("'","''")+ "'" for s in uniq)
+		return f"({quoted})"
+	
+	def _run_batched(
+			self, 
+			base_sql,
+			param_name, 
+			ids, 
+			batch_size=5000, 
+			extra_format = None):
+		ids = list(dict.formkeys(str(x) for x in ids))
+		if not ids:
+			return pd.DataFrame()
+		
+		frames = []
+		for i in range(0,len(ids), batch_size):
+			chunk = ids[i: i+batch_size]
+			fmt = {param_name :self._format_in_clause(chunk)}
+			if extra_format:
+				fmt.update(extra_format)
+
+			sql = base_sql.format(**fmt)  # this does assume the sqls included in the page have some {} clause.
+			frames.append(self._execute(sql))
+		
+		return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame
+	
+
+	@staticmethod
+	def _or_like(field_expr, terms):
+		items = [x for x in (terms or []) if x is not None and str(x) != ""]
+		if not items:
+			# this 1=0 is build so the SQL query remains valid, but guarantees zero matches.
+			# e.g we prevent the query to go from
+			# WHERE participant_id IN {participants} AND {diag_like}
+			# to "WHERE participant_id IN (...) AND"
+			# which would break.
+			return "(1=0)"
+
+		parts = []
+		for x in items:
+			t = str(x).replace("'", "''")  # escape single quotes
+			parts.append(f"{field_expr} LIKE '%{t}%'")
+		return "(" + " OR ".join(parts) + ")"
