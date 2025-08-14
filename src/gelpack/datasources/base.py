@@ -72,7 +72,7 @@ class BaseLoader(ABC):
 		if template is None:
 			return self._execute(key_or_spec)
 		
-		placeholders = set(re.findall(r"{(\w+)}"), template)
+		placeholders = set(re.findall(r"{(\w+)}", template))
 		fmt = dict(params)
 
 		# inject LIKE chains only when its requested by the template.
@@ -135,7 +135,7 @@ class BaseLoader(ABC):
 			ids, 
 			batch_size=5000, 
 			extra_format = None):
-		ids = list(dict.formkeys(str(x) for x in ids))
+		ids = list(dict.fromkeys(str(x) for x in ids))
 		if not ids:
 			return pd.DataFrame()
 		
@@ -149,7 +149,7 @@ class BaseLoader(ABC):
 			sql = base_sql.format(**fmt)  # this does assume the sqls included in the page have some {} clause.
 			frames.append(self._execute(sql))
 		
-		return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame
+		return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 	
 
 	@staticmethod
