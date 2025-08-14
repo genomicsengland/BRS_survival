@@ -19,9 +19,24 @@ class BaseLoader(ABC):
 
 	def __init__(self, version, queries, default_batch_size=5000):
 		self.version = version
-		self.queries = queries or {}
+		self.queries = self._merge_queries(queries) 
 		self.default_batch_size=default_batch_size
 	
+	@staticmethod
+	def _merge_queries(qsrc):
+		# Accept dict, or list/tuple of dicts (later entries override earlier)
+		if qsrc is None:
+			return {}
+		if isinstance(qsrc, dict):
+			return dict(qsrc)
+		if isinstance(qsrc, (list, tuple)):
+			merged = {}
+			for q in qsrc:
+				if not isinstance(q, dict):
+					raise TypeError("Each queries source must be a dict.")
+				merged.update(q)
+			return merged
+		raise TypeError("queries must be a dict or a list/tuple of dicts.")
 
 	# backend hook
 	@abstractmethod
@@ -112,7 +127,12 @@ class BaseLoader(ABC):
 			if isinstance(v, (list, tuple, pd.Series)):
 				fmt[k] = self._format_in_clause(v)
 
-		spec = template.format(**fmt)
+		try:
+			spec = template.format(**fmt)
+		except KeyError as e:
+			missing = sorted(placeholders - set(fmt))
+			raise ValueError(f"Missing placeholders for query '{key_or_spec}': {missing}") from e
+
 		return self._execute(spec)
 	
 	# adding in some helpers for Cohort and Survdat,
