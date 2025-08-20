@@ -47,15 +47,15 @@ class Cohort(object):
         - self.sample_view: pd.DataFrame          # normalized 1-row-per-sample view with unified `sample_id`
         - self.provenance: List[dict]             # decisions log (e.g., which platekeys were dropped and why)
     """
-    def __init__(self,
+    def __init__(
+        self,
         version=None,
         loader=None,
-        featdict=None, 
-        participants=None, 
-        platekeys=None, 
-        name=None
-        ):
-
+        featdict=None,
+        participants=None,
+        platekeys=None,
+        name=None,
+    ):
         # Loader setup
         if loader is None:
             if version is None:
@@ -68,16 +68,17 @@ class Cohort(object):
             loader = _get_loader(api="labkey", version=version)
 
         self.loader = loader
+        self.version = version or getattr(loader, "version", None)
+
+        # Optional: initial feature dictionary
         self.featdict = featdict or {}
-        # check if the featdict has correctly been generated.
-        # how to handel multiple? (featdict + platekeys?)
         if self.featdict:
+            # validate + normalise keys and cache convenience lists
             valid_keys = {"icd10", "hpo", "terms", "cancer_terms", "cancer_abbr"}
             if not any(k in valid_keys for k in self.featdict.keys()):
                 raise KeyError(
                     "featdict must contain at least one of: icd10, hpo, terms, cancer_terms, cancer_abbr"
                 )
-
             if "icd10" in self.featdict:
                 self.icd10s = force_list(self.featdict["icd10"])
             if "hpo" in self.featdict:
@@ -89,36 +90,33 @@ class Cohort(object):
             if "cancer_abbr" in self.featdict:
                 self.cabbr = force_list(self.featdict["cancer_abbr"])
 
-        self.key_mode = 'participant'
-        self.version = version or getattr(loader, "version", None)        
-        self.pids = {}
-        self.feature_tables = {}
-        self.sample_tables = {}
+        # Core state
+        self.pids = {}                 # source_key -> Series[participant_id]
+        self.feature_tables = {}       # feature_name -> {source_key: DataFrame}
+        self.sample_tables = {}        # sample_name  -> {source_key: DataFrame}
         self.name = name
-        self.platekeys = None
-        self.input_platekeys = None
-        self.plate_map = None
+        self.platekeys = None          # union/derived platekeys
+        self.input_platekeys = None    # exactly what the user passed (if any)
+        self.plate_map = None          # DataFrame[plate_key, participant_id]
         self.groups = {}
         self.survdat = None
-        self.provenance = [] # decision trail (e.g. single sample selection)
+        self.provenance = []           # decisions log
 
+        # Require at least one seed
         if participants is None and platekeys is None and not self.featdict:
             raise ValueError("Provide featdict and/or participants and/or platekeys to create a cohort.")
 
-
-        # Participants intake
-        if platekeys is not None:
-            pk_series = pd.Series(force_list(platekeys), dtype=str).dropna().drop_duplicates()
-            plate_pids = self.loader.grab_data("pids_by_platekeys", platekeys=pk_series)
-            if plate_pids is None or plate_pids.empty:
-                warnings.warn("No participants found for provided platekeys.")
+        # Participants intake (explicit list or "all_cancer" convenience)
+        if participants is not None:
+            if isinstance(participants, str) and participants == "all_cancer":
+                ca_pids = self.loader.grab_data("cancer_parts")
+                if ca_pids is not None and "participant_id" in ca_pids.columns:
+                    self.add_participants(ca_pids["participant_id"])
+                else:
+                    warnings.warn("No participants found for 'all_cancer'.")
             else:
-                # Store mapping + platekeys + participants
-                self.plate_map = plate_pids[["plate_key", "participant_id"]].drop_duplicates()
-                self.platekeys = pk_series
-                self.add_participants(plate_pids["participant_id"])
+                self.add_participants(participants)
 
-        
         # Platekeys intake -> resolve to participants
         if platekeys is not None:
             pk_series = pd.Series(force_list(platekeys), dtype=str).dropna().drop_duplicates()
@@ -129,13 +127,99 @@ class Cohort(object):
                 # Store mapping + platekeys + participants
                 self.plate_map = plate_pids[["plate_key", "participant_id"]].drop_duplicates()
                 self.platekeys = pk_series
-                self.input_platekeys = pk_series   # <-- remember the exact input set
+                self.input_platekeys = pk_series  # remember the exact input set
                 self.add_participants(plate_pids["participant_id"])
 
 
+    # small helper function to ensure participant_id are strings.
+    @staticmethod
+    def _ensure_pid_str(df):
+        """Ensure participant_id column uses pandas 'string' dtype."""
+        if isinstance(df, pd.DataFrame) and "participant_id" in df.columns:
+            df = df.copy()
+            df["participant_id"] = df["participant_id"].astype("string")
+        return df
+
+    @staticmethod
+    def _series_as_pid(s):
+        """Coerce any list/Series to de-duplicated 'string' Series named participant_id."""
+        if isinstance(s, pd.Series):
+            out = s.dropna().astype("string").rename("participant_id")
+        else:
+            out = pd.Series(force_list(s), dtype="string", name="participant_id").dropna()
+        return out.drop_duplicates().reset_index(drop=True)
     ## ---------------------------------------------------------------##
     ########## adding or removing participants to cohort ###############
     ## ---------------------------------------------------------------##
+
+    # enable featdicts to be added post initialisation of the cohort.
+    def set_featdict(self, featdict, merge=True):
+        """
+        (Optionally) merge a new featdict into this cohort and normalize cached lists.
+        If merge=False the featdict is replaced.
+        """
+        if not isinstance(featdict, dict) or not featdict:
+            raise ValueError("set_featdict: provide a non-empty dict.")
+
+        valid_keys = {"icd10", "hpo", "terms", "cancer_terms", "cancer_abbr"}
+        unknown = [k for k in featdict.keys() if k not in valid_keys]
+        if unknown:
+            raise KeyError(f"Unknown featdict keys: {unknown}. Allowed: {sorted(valid_keys)}")
+
+        if merge and isinstance(self.featdict, dict):
+            # merge lists with de-dup
+            merged = dict(self.featdict)
+            for k, v in featdict.items():
+                prev = merged.get(k, [])
+                merged[k] = list(pd.unique(force_list(prev) + force_list(v)))
+            self.featdict = merged
+        else:
+            self.featdict = {k: force_list(v) for k, v in featdict.items()}
+
+        self._normalize_featdict_keys()
+
+        self.provenance.append({
+            "action": "set_featdict",
+            "merge": bool(merge),
+            "keys": sorted(self.featdict.keys())
+        })
+
+    def _normalize_featdict_keys(self):
+        """Cache axis lists from self.featdict onto attributes for quick access."""
+        d = self.featdict if isinstance(self.featdict, dict) else {}
+        # Clear then (re)populate to reflect current featdict
+        for attr in ("icd10s", "hpo", "dterms", "cterms", "cabbr"):
+            if hasattr(self, attr):
+                delattr(self, attr)
+
+        if "icd10" in d:
+            self.icd10s = force_list(d["icd10"])
+        if "hpo" in d:
+            self.hpo = force_list(d["hpo"])
+        if "terms" in d:
+            self.dterms = force_list(d["terms"])
+        if "cancer_terms" in d:
+            self.cterms = force_list(d["cancer_terms"])
+        if "cancer_abbr" in d:
+            self.cabbr = force_list(d["cancer_abbr"])
+
+    def _ensure_axis(self, feat_key, attr_name):
+        """
+        Ensure e.g. self.dterms / self.icd10s exists; if missing, try to hydrate
+        from self.featdict. Raise a clear error if still unavailable.
+        """
+        vals = getattr(self, attr_name, None)
+        if vals:
+            return  # already cached
+
+        if isinstance(self.featdict, dict) and feat_key in self.featdict:
+            setattr(self, attr_name, force_list(self.featdict[feat_key]))
+            return
+
+        raise ValueError(
+            f"No '{feat_key}' provided. Pass featdict={{'{feat_key}': [...]}} "
+            f"at construction or call set_featdict(...) before this method."
+        )
 
     ## ------------------------------------------------
     # split old costum_pids into several functions:
@@ -171,36 +255,32 @@ class Cohort(object):
         Args:
             ids (str, list, pd.Series): participant_ids to add.
         """
+
         if isinstance(ids, str) and ids.endswith((".tsv", ".csv", ".txt")):
             ids = self._read_participants_from_file(ids)
-        elif isinstance(ids, list, tuple):
-            ids = pd.Series(ids, name="participant_id")
-        elif isinstance(ids, pd.Series):
-            ids = ids.rename("participant_id")
-        elif isinstance(ids, (str, int)):
-            ids = pd.Series([str(ids)], name="participant_id")
-        else:
-            warnings.warn("add_participants: unsupported type; ignoring.")
-            return
-        
-        ids = ids.dropna().astype(str)
 
-        prev = self.pids.get("custom")  ## appending to existing
+        ids = self._series_as_pid(ids)  # <-- canonicalize here
+
+        prev = self.pids.get("custom")
         if prev is not None:
-            prev = prev.dropna().astype(str)
-            combined = pd.concat([prev, ids], ignore_index=True)
-            combined_unique = combined.drop_duplicates().reset_index(drop=True)
-            added_n = int(len(combined_unique) - len(prev.drop_duplicates()))
-            self.pids["custom"] = combined_unique
+            prev = self._series_as_pid(prev)
+            combined = (pd.concat(
+                [prev, ids], 
+                ignore_index=True)
+            .drop_duplicates()
+            .reset_index(drop=True))
+            added_n = int(len(combined) - len(prev))
+            self.pids["custom"] = combined
         else:
-            self.pids["custom"] = ids.drop_duplicates().reset_index(drop=True)
-            added_n = int(len(self.pids["custom"]))
+            self.pids["custom"] = ids
+            added_n = int(len(ids))
 
         self.provenance.append({
             "action": "add_participants",
             "n_added": added_n,
             "total_custom": int(len(self.pids["custom"]))
         })
+
 
     def remove_participants(self, ids):
         """remove participant_id from cohort membership, also purging their 
@@ -216,7 +296,7 @@ class Cohort(object):
             warnings.warn("remove_participants: unsupported type; ignoring.")
             return
 
-        id_set = set(ids.astype(str))
+        id_set = set(self._series_as_pid(ids).astype(str))
 
         # membership
         for key, series in list(self.pids.items()):
@@ -337,9 +417,9 @@ class Cohort(object):
             pd.DataFrame: a dataframe with participant_ids and normalised
             disease terms.
         """
-        if not hasattr(self, "dterms"):
-            raise ValueError("No 'terms' in featdict.")
+        self._ensure_axis("terms", "dterms")
         df = self.loader.grab_data("rd_participant_disease_by_terms", terms=self.dterms)
+        df = self._ensure_pid_str(df)
         self.dterm_table = df
         self.pids["dterm"] = df["participant_id"]
     
@@ -353,9 +433,9 @@ class Cohort(object):
             pd.DataFrame: a dataframe with participant_ids and normalised
             disease terms.
         """
-        if not hasattr(self, "hpo"):
-            raise ValueError("No 'hpo' in featdict.")
+        self._ensure_axis("hpo", "hpo") 
         df = self.loader.grab_data("hpo_pids_by_ids", hpo_ids=self.hpo)
+        df = self._ensure_pid_str(df)
         self.hpo_table = df
         self.pids["hpo"] = df["participant_id"]
 
@@ -373,10 +453,11 @@ class Cohort(object):
             pd.DataFrame: a dataframe with participant_ids and cancer
             disease types.
         """
-        if not hasattr(self, "cterms"):
-            raise ValueError("No 'cancer_terms' in featdict.")
+        self._ensure_axis("cancer_terms", "cterms")
         cpd = self.loader.grab_data("cancer_participant_disease_by_types", cancer_types=self.cterms)
         ca = self.loader.grab_data("cancer_analysis_by_disease_type", cancer_types=self.cterms)
+        cpd = self._ensure_pid_str(cpd)
+        ca  = self._ensure_pid_str(ca)
         disease_table = pd.concat([cpd, ca], axis=0, ignore_index=True).drop_duplicates()
         self.cterm_table = disease_table
         self.pids["cterm"] = disease_table["participant_id"]
@@ -386,9 +467,9 @@ class Cohort(object):
         """Query cancer analysis for participants with a given study abbreviation
         This is currently limited to the GEL 100K cancer cohort.
         """
-        if not hasattr(self, "cabbr"):
-            raise ValueError("No 'cancer_abbr' in featdict.")
+        self._ensure_axis("cancer_abbr", "cabbr")
         df = self.loader.grab_data("cancer_analysis_by_abbr", abbrs=self.cabbr)
+        df = self._ensure_pid_str(df)
         self.cabbr_table = df
         self.pids["cabbr"] = df["participant_id"]
 
@@ -457,6 +538,9 @@ class Cohort(object):
             raise ValueError("limit must be a subset of {'all','hes','mort','mental_health','cancer'}")
         cats = ["hes", "mort", "mental_health", "cancer"] if "all" in req else list(req)
 
+        self._ensure_axis("icd10", "icd10s")
+
+
         from gelpack.queries.labkey_queries_v19 import ICD10_SOURCES
 
         frames = []
@@ -474,6 +558,7 @@ class Cohort(object):
                     likes={"like_diag": ("diag", self.icd10s)},
                     **extra,
                 )
+                df = self._ensure_pid_str(df)
                 if df is None or df.empty:
                     continue
 
@@ -530,6 +615,7 @@ class Cohort(object):
 
         for key, pid in self.pids.items():
             df = self.loader.grab_data("participant_age", participants=pid)
+            df = self._ensure_pid_str(df)
 
             if df is None:
                 df = pd.DataFrame(columns=[
@@ -609,6 +695,8 @@ class Cohort(object):
 
         for key, pid in self.pids.items():
             df = self.loader.grab_data("aggregate_gvcf_ancestry", participants=pid)
+            df = self._ensure_pid_str(df)
+
             if df is None or df.empty:
                 out = pd.DataFrame({"participant_id": list(pid), "predicted_ancestry": "UNO"})
                 self.ancestry_table[key] = out
@@ -717,6 +805,8 @@ class Cohort(object):
 
         for key, pid in self.pids.items():
             df = self.loader.grab_data("participant_sex", participants=pid)
+            df = self._ensure_pid_str(df) 
+
             if df is None:
                 df = pd.DataFrame(columns=["participant_id","sex"])
             self.sex_table[key] = df
@@ -780,6 +870,7 @@ class Cohort(object):
             frames = []
             for key in sources:
                 df = self.loader.grab_data(key, participants=pid)
+                df = self._ensure_pid_str(df)
                 if df is not None and not df.empty:
                     df = df.loc[:, ["participant_id", "dod"]].copy()
                     frames.append(df)
@@ -811,7 +902,7 @@ class Cohort(object):
             picked = picked.rename(columns={"dod": "date_of_death"})[["participant_id", "date_of_death"]]
 
             # ensure all cohort pids appear
-            out = (pd.DataFrame({"participant_id": pd.Series(pid).astype(str).drop_duplicates()})
+            out = (pd.DataFrame({"participant_id": pd.Series(pid, dtype="string").drop_duplicates()})
                     .merge(picked, on="participant_id", how="left"))
             out["status"] = np.where(out["date_of_death"].isna(), "Alive", "Deceased")
 
@@ -836,6 +927,7 @@ class Cohort(object):
         if seeded:
             # Return only the explicitly provided platekeys
             df = self.loader.grab_data("rd_samples_by_platekeys", platekeys=self.input_platekeys)
+            df = self._ensure_pid_str(df)
             for key, _pid in self.pids.items():
                 self.rd_samples[key] = df
                 prov_rows.append({
@@ -852,6 +944,7 @@ class Cohort(object):
             # No input platekeys: gather all RD samples for the cohort participants
             for key, pid in self.pids.items():
                 df = self.loader.grab_data("rd_samples_by_participants", participants=pid)
+                df = self._ensure_pid_str(df)
                 self.rd_samples[key] = df
                 prov_rows.append({
                     "action": "rd_sample_data",
@@ -902,6 +995,7 @@ class Cohort(object):
         if seeded:
             # Return only the explicitly provided platekeys
             df = self.loader.grab_data("cancer_samples_by_platekeys", platekeys=self.input_platekeys)
+            df = self._ensure_pid_str(df)
             for key, _pid in self.pids.items():
                 self.cancer_samples[key] = df
                 prov_rows.append({
@@ -918,6 +1012,7 @@ class Cohort(object):
             # No input platekeys: gather all CA samples for the cohort participants
             for key, pid in self.pids.items():
                 df = self.loader.grab_data("cancer_samples_by_participants", participants=pid)
+                df = self._ensure_pid_str(df)
                 self.cancer_samples[key] = df
                 prov_rows.append({
                     "action": "ca_sample_data",
@@ -930,19 +1025,14 @@ class Cohort(object):
                     "columns_out": [] if df is None else list(df.columns),
                 })
 
-            # Only infer platekeys if we were NOT seeded by platekeys
-            try:
-                all_ca = self.concat_cohort(self.cancer_samples)
-                # Prefer tumour platekeys; fall back to germline if needed
-                inferred = pd.Series(dtype=str)
-                for col in ("tumour_sample_platekey", "germline_sample_platekey"):
-                    if col in all_ca.columns:
-                        inferred = pd.concat([inferred, all_ca[col].dropna().astype(str)])
-                inferred = inferred.drop_duplicates().reset_index(drop=True)
+            # Infer platekeys ONLY from tumour_sample_platekey (PRIMARY)
+            all_ca = self.concat_cohort(self.cancer_samples)
+            if isinstance(all_ca, pd.DataFrame) and not all_ca.empty and "tumour_sample_platekey" in all_ca.columns:
+                inferred = (all_ca["tumour_sample_platekey"]
+                            .dropna().astype(str).drop_duplicates().reset_index(drop=True))
                 if not inferred.empty:
-                    self.platekeys = inferred
-            except Exception:
-                pass
+                    self.platekeys = inferred  # PRIMARY = tumour
+            # (No fallback to germline here by design.)
 
         self.sample_tables["cancer_samples"] = self.cancer_samples
         self.feature_tables["cancer_samples_provenance"] = pd.DataFrame(prov_rows)
@@ -961,6 +1051,7 @@ class Cohort(object):
 
         for key, pid in self.pids.items():
             df = self.loader.grab_data("participant_gmc_registration", participants=pid)
+            df = self._ensure_pid_str(df)
             self.gmc_registration[key] = df
 
             prov_rows.append({
@@ -1001,6 +1092,7 @@ class Cohort(object):
 
         for key, pid in self.pids.items():
             df = self.loader.grab_data("omics_metadata_by_participants", participants=pid)
+            df = self._ensure_pid_str(df)
             self.omics_sample_data[key] = df
 
             # Counts: histogram of aliquots per sample_type
@@ -1069,41 +1161,51 @@ class Cohort(object):
 
         # all DataFrames
         if all(isinstance(v, pd.DataFrame) for v in vals):
-            if len(vals) > 1:
-                out = (pd.concat(vals, ignore_index=True)
-                        .drop_duplicates()
-                        .reset_index(drop=True))
-            else:
-                out = vals[0].drop_duplicates().reset_index(drop=True)
-            return out
+            frames = []
+            for v in vals:
+                df = v.copy()
+                if "participant_id" in df.columns:
+                    df["participant_id"] = df["participant_id"].astype("string")
+                frames.append(df)
+            return (
+                pd.concat(frames, ignore_index=True)
+                .drop_duplicates()
+                .reset_index(drop=True)
+            )
 
-        # series / list-like (e.g., pids)
+        # all sequences: build a DF with participant_id
         if all(isinstance(v, (pd.Series, list, tuple)) for v in vals):
             frames = []
             for v in vals:
-                s = v if isinstance(v, pd.Series) else pd.Series(v)
-                s = s.dropna().astype(str).rename("participant_id")
+                s = v if isinstance(v, pd.Series) else pd.Series(list(v))
+                s = s.dropna().astype("string").rename("participant_id")
                 frames.append(pd.DataFrame({"participant_id": s}))
-            out = (pd.concat(frames, ignore_index=True)
-                    .drop_duplicates()
-                    .reset_index(drop=True))
-            return out
+            return (
+                pd.concat(frames, ignore_index=True)
+                .drop_duplicates()
+                .reset_index(drop=True)
+            )
 
-        # mixed types: try coerce Series-like to DF, else raise
+        # mixed types: coerce sequences to DF, pass DFs through (making sure pid = str)
         frames = []
         for v in vals:
             if isinstance(v, pd.DataFrame):
-                frames.append(v)
+                df = v.copy()
+                if "participant_id" in df.columns:
+                    df["participant_id"] = df["participant_id"].astype("string")
+                frames.append(df)
             elif isinstance(v, (pd.Series, list, tuple)):
-                s = v if isinstance(v, pd.Series) else pd.Series(v)
-                s = s.dropna().astype(str).rename("participant_id")
+                s = v if isinstance(v, pd.Series) else pd.Series(list(v))
+                s = s.dropna().astype("string").rename("participant_id")
                 frames.append(pd.DataFrame({"participant_id": s}))
             else:
                 raise TypeError("concat_cohort: unsupported dict value type.")
-        out = (pd.concat(frames, ignore_index=True)
-                .drop_duplicates()
-                .reset_index(drop=True))
-        return out
+
+        return (
+            pd.concat(frames, ignore_index=True)
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
 
 
     def concat_all(self):
@@ -1119,75 +1221,107 @@ class Cohort(object):
         Raises:
             RuntimeError: When no valid cohort is present
         """
-        # this function requires some restructuring, 
-        # right now it checks if there are participant_ids,
-        # if there are features, and if there are samples.
-        # if either one of those are not present it will return a runtime error
-        # probably better to:
-        #
-        # only return a runtime error if there are no participant ids:
-        diag_keys = [
-            'icd10',
-            'dterm',
-            'cterm',
-            'cabbr',
-            'hpo',
-            'custom'
-        ]
+
+
+        diag_keys = ["icd10", "dterm", "cterm", "cabbr", "hpo", "custom"]
         
+        # only return a runtime error if there are no participant ids:
         if all(k not in self.pids for k in diag_keys):
             raise RuntimeError("No valid cohorts to concatenate found")
-        
-        self.all_pids = self.concat_cohort(self.pids)["participant_id"]
-        
-        # concat the diagnosis fields.
+
+        # Union of current cohort membership (normalize only the key column)
+        pid_union = self.concat_cohort(self.pids)
+        if pid_union.empty or "participant_id" not in pid_union.columns:
+            raise RuntimeError("No participants available to concatenate.")
+        pid_union = pid_union.copy()
+        pid_union["participant_id"] = pid_union["participant_id"].astype("string")
+        self.all_pids = pid_union["participant_id"]
+
+        # Build diagnosis table
         conc_tables = []
         for key in diag_keys:
-            if key in self.pids:
-                if key == "dterm":
-                    conc_tables.append(self.dterm_table.rename(columns={"normalised_specific_disease": "diag"}))
-                elif key == "icd10":
-                    conc_tables.append(self.icd10_table.rename(columns={"code": "diag"}))
-                elif key == "cterm":
-                    conc_tables.append(self.cterm_table.rename(columns={"disease_type": "diag"}))
-                elif key == "cabbr":
-                    conc_tables.append(self.cabbr_table.rename(columns={"study_abbreviation": "diag"}))
-                elif key == "hpo":
-                    conc_tables.append(self.hpo_table.rename(columns={"normalised_hpo_id": "diag"}))
-                elif key == "custom":
-                    tmp = pd.DataFrame({"participant_id": self.pids["custom"]})
-                    tmp["diag"] = "custom"
-                    conc_tables.append(tmp)
-        
-        diag_table = pd.concat(conc_tables, ignore_index=True) if len(conc_tables) > 1 else conc_tables[0]
-        
-        # Merge features
-        tmp_merge = [pd.DataFrame({"participant_id": self.all_pids})]
-        for name, feature in self.feature_tables.items():
+            if key not in self.pids:
+                continue
+            if key == "dterm" and hasattr(self, "dterm_table"):
+                t = self.dterm_table.rename(columns={"normalised_specific_disease": "diag"})
+                t = t.loc[:, ["participant_id", "diag"]].copy()
+                t["participant_id"] = t["participant_id"].astype("string")
+                conc_tables.append(t)
+            elif key == "icd10" and hasattr(self, "icd10_table"):
+                t = self.icd10_table.rename(columns={"code": "diag"})
+                t = t.loc[:, ["participant_id", "diag"]].copy()
+                t["participant_id"] = t["participant_id"].astype("string")
+                conc_tables.append(t)
+            elif key == "cterm" and hasattr(self, "cterm_table"):
+                t = self.cterm_table.rename(columns={"disease_type": "diag"})
+                t = t.loc[:, ["participant_id", "diag"]].copy()
+                t["participant_id"] = t["participant_id"].astype("string")
+                conc_tables.append(t)
+            elif key == "cabbr" and hasattr(self, "cabbr_table"):
+                t = self.cabbr_table.rename(columns={"study_abbreviation": "diag"})
+                t = t.loc[:, ["participant_id", "diag"]].copy()
+                t["participant_id"] = t["participant_id"].astype("string")
+                conc_tables.append(t)
+            elif key == "hpo" and hasattr(self, "hpo_table"):
+                t = self.hpo_table.rename(columns={"normalised_hpo_id": "diag"})
+                t = t.loc[:, ["participant_id", "diag"]].copy()
+                t["participant_id"] = t["participant_id"].astype("string")
+                conc_tables.append(t)
+            elif key == "custom":
+                t = pd.DataFrame({"participant_id": self.pids["custom"]})
+                t["participant_id"] = t["participant_id"].astype("string")
+                t["diag"] = "custom"
+                conc_tables.append(t.loc[:, ["participant_id", "diag"]])
+
+        if not conc_tables:
+            raise RuntimeError("No diagnosis/ontology tables to anchor concat_all().")
+
+        diag_table = (
+            pd.concat(conc_tables, ignore_index=True)
+            .dropna(subset=["participant_id", "diag"])
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
+
+        # merge all features & samples on participant_id (keep original dtypes elsewhere)
+        tmp_merge = [pid_union.loc[:, ["participant_id"]].copy()]
+
+        # participant-level features
+        for _, feature in self.feature_tables.items():
             if isinstance(feature, dict) and feature:
                 merged = self.concat_cohort(feature)
-                if not merged.empty:
-                    tmp_merge.append(merged)
+                if not merged.empty and "participant_id" in merged.columns:
+                    m = merged.copy()
+                    m["participant_id"] = m["participant_id"].astype("string")
+                    tmp_merge.append(m)
 
-
-        # Merge sample tables (participant merge; sample-level views exposed separately)
+        # sample-level tables 
         self.all_cancer_samples = None
         self.all_rd_samples = None
         for name, samples in self.sample_tables.items():
-            if name == "omics_sample_data":
-                tmp_merge.append(self.concat_cohort(samples))
-            elif name == "cancer_samples":
-                self.all_cancer_samples = self.concat_cohort(samples)
-                tmp_merge.append(self.all_cancer_samples)
+            merged = self.concat_cohort(samples)
+            if name == "cancer_samples":
+                self.all_cancer_samples = merged
             elif name == "rare_disease_samples":
-                self.all_rd_samples = self.concat_cohort(samples)
-                tmp_merge.append(self.all_rd_samples)
+                self.all_rd_samples = merged
+            if not merged.empty and "participant_id" in merged.columns:
+                m = merged.copy()
+                m["participant_id"] = m["participant_id"].astype("string")
+                tmp_merge.append(m)
 
-        df_merged = reduce(
-            lambda left, right: pd.merge(left, right, on=["participant_id"], how="left"),
-            tmp_merge,
-        )
+        # safe reduce (works even if there’s only the seed frame)
+        if len(tmp_merge) == 1:
+            df_merged = tmp_merge[0]
+        else:
+            df_merged = reduce(
+                lambda left, right: pd.merge(left, right, on=["participant_id"], how="left"),
+                tmp_merge,
+            )
+
+        diag_table = diag_table.copy()
+        diag_table["participant_id"] = diag_table["participant_id"].astype("string")
         self.all_data = pd.merge(diag_table, df_merged, on="participant_id", how="left")
+
 
 
     def summarize(self, pid=None, anc=None, mort=None, age=None, sex=None, reg=None, omics=None):
