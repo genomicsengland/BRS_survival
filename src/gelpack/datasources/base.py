@@ -15,7 +15,15 @@ class BaseLoader(ABC):
 
 	# Parameter names that, if present in a template and passed as sequences,
 	# will be auto-rendered as SQL IN (...) lists or batched.
-	_IN_KEYS = {"participants", "platekeys", "disease_types", "abbrs"}
+	_IN_KEYS = {
+		"participants", 
+		"platekeys", 
+		"disease_types", 
+		"abbrs",
+		"terms", 
+		"hpo_ids", 
+		"cancer_types"
+		}
 
 	def __init__(self, version, queries, default_batch_size=5000):
 		self.version = version

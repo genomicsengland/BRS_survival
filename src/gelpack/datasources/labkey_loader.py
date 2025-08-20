@@ -14,4 +14,4 @@ class LabKeyLoader(BaseLoader):
         from gelpack.gel_utils import lab_to_df
         return lab_to_df(sql_query=spec, dr=self.version)
     # for now just grabbing the lab_to_df function for backwards compatibility
-    # but we should implememnt the lab_to_df function within this _execute later.
+    # but we should implement the lab_to_df function within this _execute later.
