@@ -1,5 +1,6 @@
 # dictionary of required SQL queries.
 # this file needs to be edited when tables change during data releases.
+# contains both QUERIES and ICD10_SOURCES. 
 
 # Centralised SQL templates used by Cohort + Survdat.
 
@@ -17,6 +18,37 @@
 # the loader should render:
 #   sql = QUERIES[key].format(participants=in_clause, like_diag=or_like("diag", terms), ...)
 # and can batch the {participants} placeholder if needed.
+
+
+ICD10_SOURCES = {
+    "hes": [
+        {"key": "hes_apc_diag_like"},
+        {"key": "hes_ae_diag_like"},
+        {"key": "hes_op_diag_like"},
+    ],
+    "mort": [
+        {"key": "mortality_icd10_like"},
+    ],
+    "mental_health": [
+        {"key": "mhmd_event_icd10_like"},
+        {"key": "mhldds_event_icd10_like"},
+        {"key": "mhsds_medical_history_previous_diagnosis_icd10"},
+        {"key": "mhsds_provisional_diagnosis_icd10"},
+        {"key": "mhsds_primary_diagnosis_icd10"},
+        {"key": "mhsds_secondary_diagnosis_icd10"},
+        {"key": "mhsds_care_activity_icd10"},
+        {"key": "mhsds_indirect_activity_icd10"},
+    ],
+    "cancer": [
+        # generic template + parameters
+        {"key": "cancer_icd10_from_table", "table": "cancer_invest_sample_pathology", "code_col": "primary_diagnosis_icd_code"},
+        {"key": "cancer_icd10_from_table", "table": "cancer_participant_tumour",      "code_col": "diagnosis_icd_code"},
+        {"key": "cancer_icd10_from_table", "table": "cancer_registry",                "code_col": "cancer_site"},
+        {"key": "cancer_icd10_from_table", "table": "rtds",                           "code_col": "radiotherapydiagnosisicd"},
+        {"key": "cancer_icd10_from_table", "table": "sact",                           "code_col": "primary_diagnosis"},
+        {"key": "cancer_icd10_from_table", "table": "av_tumour",                      "code_col": "site_icd10_o2"},
+    ],
+}
 
 QUERIES = {
     # --------------------- Generic / utility ---------------------
@@ -265,17 +297,17 @@ QUERIES = {
         WHERE participant_id IN {participants}
     """,
 
-    "aggregate_gvcf_ancestry": """
-        SELECT
-            participant_id,
-            pred_african_ancestries,
-            pred_south_asian_ancestries,
-            pred_east_asian_ancestries,
-            pred_european_ancestries,
-            pred_american_ancestries
-        FROM aggregate_gvcf_sample_stats
-        WHERE participant_id IN {participants}
-    """,
+	"aggregate_gvcf_ancestry": """
+		SELECT
+			participant_id,
+			pred_african_ancestries      AS AFR,
+			pred_south_asian_ancestries  AS SAS,
+			pred_east_asian_ancestries   AS EAS,
+			pred_european_ancestries     AS EUR,
+			pred_american_ancestries     AS AMR
+		FROM aggregate_gvcf_sample_stats
+		WHERE participant_id IN {participants}
+	""",
 
     "participant_sex": """
         SELECT participant_id, participant_phenotypic_sex AS sex
@@ -284,56 +316,56 @@ QUERIES = {
     """,
 
     # --------------------- Mortality (status / DoD) ---------------------
-    "death_details_by_pids": """
-        SELECT DISTINCT participant_id, death_date
-        FROM death_details
-        WHERE participant_id IN {participants}
-    """,
+	"death_details_by_pids": """
+		SELECT DISTINCT participant_id, death_date AS dod
+		FROM death_details
+		WHERE participant_id IN {participants}
+	""",
 
-    "mortality_by_pids": """
-        SELECT participant_id, date_of_death
-        FROM mortality
-        WHERE participant_id IN {participants}
-    """,
+	"mortality_by_pids": """
+		SELECT participant_id, date_of_death AS dod
+		FROM mortality
+		WHERE participant_id IN {participants}
+	""",
 
-    "rare_diseases_pedigree_member_dod": """
-        SELECT participant_id, date_of_death
-        FROM rare_diseases_pedigree_member
-        WHERE participant_id IN {participants}
-    """,
+	"rare_diseases_pedigree_member_dod": """
+		SELECT participant_id, date_of_death AS dod
+		FROM rare_diseases_pedigree_member
+		WHERE participant_id IN {participants}
+	""",
 
     # --------------------- Rare Disease samples ---------------------
-    "rd_samples_by_platekeys": """
-        SELECT
-            participant_id,
-            plate_key,
-            family_id,
-            assembly,
-            is_proband,
-            normalised_specific_disease_proband,
-            affection_status,
-            platypus_vcf_path,
-            case_solved_family,
-            last_status
-        FROM rare_disease_interpreted
-        WHERE plate_key IN {platekeys}
-    """,
+	"rd_samples_by_platekeys": """
+		SELECT
+			participant_id,
+			plate_key AS sample_platekey,
+			family_id,
+			assembly,
+			is_proband,
+			normalised_specific_disease_proband,
+			affection_status,
+			platypus_vcf_path,
+			case_solved_family,
+			last_status
+		FROM rare_disease_interpreted
+		WHERE plate_key IN {platekeys}
+	""",
 
-    "rd_samples_by_participants": """
-        SELECT
-            participant_id,
-            plate_key,
-            family_id,
-            assembly,
-            is_proband,
-            normalised_specific_disease_proband,
-            affection_status,
-            platypus_vcf_path,
-            case_solved_family,
-            last_status
-        FROM rare_disease_interpreted
-        WHERE participant_id IN {participants}
-    """,
+	"rd_samples_by_participants": """
+		SELECT
+			participant_id,
+			plate_key AS sample_platekey,
+			family_id,
+			assembly,
+			is_proband,
+			normalised_specific_disease_proband,
+			affection_status,
+			platypus_vcf_path,
+			case_solved_family,
+			last_status
+		FROM rare_disease_interpreted
+		WHERE participant_id IN {participants}
+	""",
 
     # --------------------- Cancer Analysis samples ---------------------
     "cancer_samples_by_platekeys": """
@@ -448,11 +480,15 @@ QUERIES = {
         WHERE samp.participant_id IN {participants}
     """,
 
-    "participant_gmc_registration": """
-        SELECT participant_id, registered_at_gmc_trust, registered_at_gmc_ods_code
-        FROM participant
-        WHERE participant_id IN {participants}
-    """,
+	"participant_gmc_registration": """
+		SELECT
+			participant_id,
+			registered_at_gmc_trust AS gmc_trust,
+			registered_at_gmc_ods_code AS gmc_ods_code
+		FROM participant
+		WHERE participant_id IN {participants}
+	""",
+
 
     # --------------------- Survdat: HES last seen + AV treatment ---------------------
     "hes_apc_last_seen": """
