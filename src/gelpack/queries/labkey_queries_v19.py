@@ -97,198 +97,197 @@ QUERIES = {
 
     # --------------------- ICD-10 (HES / Mort / Mental Health / Cancer sources) ---------------------
     # HES: apc / ae / op – expose canonical diag + event_date (dot-stripped)
-    "hes_apc_diag_like": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
-                disdate AS event_date
-            FROM hes_apc
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag, event_date
-        FROM base
-        WHERE {like_diag}
-    """,
+	"hes_apc_diag_like": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
+				disdate AS event_date
+			FROM hes_apc
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag, event_date
+		FROM base
+		WHERE {like_diag}
+	""",
 
-    "hes_ae_diag_like": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
-                arrivaldate AS event_date
-            FROM hes_ae
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag, event_date
-        FROM base
-        WHERE {like_diag}
-    """,
+	"hes_ae_diag_like": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
+				arrivaldate AS event_date
+			FROM hes_ae
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag, event_date
+		FROM base
+		WHERE {like_diag}
+	""",
 
-    "hes_op_diag_like": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
-                apptdate AS event_date
-            FROM hes_op
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag, event_date
-        FROM base
-        WHERE {like_diag}
-    """,
+	"hes_op_diag_like": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
+				apptdate AS event_date
+			FROM hes_op
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag, event_date
+		FROM base
+		WHERE {like_diag}
+	""",
 
     # Mortality (ICD10 multiple cause) – canonical diag + event_date
     "mortality_icd10_like": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(icd10_multiple_cause_all, '\\.', '') AS diag,
-                date_of_death AS event_date
-            FROM mortality
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag, event_date
-        FROM base
-        WHERE {like_diag}
-    """,
-
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(icd10_multiple_cause_all, '\\.', '') AS diag,
+				date_of_death AS event_date
+			FROM mortality
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag, event_date
+		FROM base
+		WHERE {like_diag}
+	""",
     # Mental health – collapse primary + secondary into one canonical "diag"
-    "mhmd_event_icd10_like": """
-        WITH base AS (
-            SELECT participant_id, REGEXP_REPLACE(ic_eve_primarydiagnosis,   '\\.', '') AS diag
-            FROM mhmd_v4_event
-            WHERE participant_id IN {participants}
-            UNION ALL
-            SELECT participant_id, REGEXP_REPLACE(ic_eve_secondarydiagnosis, '\\.', '') AS diag
-            FROM mhmd_v4_event
-            WHERE participant_id IN {participants}
-        )
-        SELECT DISTINCT participant_id, diag
-        FROM base
-        WHERE {like_diag}
-    """,
+	"mhmd_event_icd10_like": """
+		WITH base AS (
+			SELECT participant_id, REGEXP_REPLACE(ic_eve_primarydiagnosis,   '\\.', '') AS diag
+			FROM mhmd_v4_event
+			WHERE 1=1 {and_participants}
+			UNION ALL
+			SELECT participant_id, REGEXP_REPLACE(ic_eve_secondarydiagnosis, '\\.', '') AS diag
+			FROM mhmd_v4_event
+			WHERE 1=1 {and_participants}
+		)
+		SELECT DISTINCT participant_id, diag
+		FROM base
+		WHERE {like_diag}
+	""",
 
-    "mhldds_event_icd10_like": """
-        WITH base AS (
-            SELECT participant_id, REGEXP_REPLACE(primarydiagnosis,   '\\.', '') AS diag
-            FROM mhldds_event
-            WHERE participant_id IN {participants}
-            UNION ALL
-            SELECT participant_id, REGEXP_REPLACE(secondarydiagnosis, '\\.', '') AS diag
-            FROM mhldds_event
-            WHERE participant_id IN {participants}
-        )
-        SELECT DISTINCT participant_id, diag
-        FROM base
-        WHERE {like_diag}
-    """,
+	"mhldds_event_icd10_like": """
+		WITH base AS (
+			SELECT participant_id, REGEXP_REPLACE(primarydiagnosis,   '\\.', '') AS diag
+			FROM mhldds_event
+			WHERE 1=1 {and_participants}
+			UNION ALL
+			SELECT participant_id, REGEXP_REPLACE(secondarydiagnosis, '\\.', '') AS diag
+			FROM mhldds_event
+			WHERE 1=1 {and_participants}
+		)
+		SELECT DISTINCT participant_id, diag
+		FROM base
+		WHERE {like_diag}
+	""",
 
     # MHSDS family – keep diagscheme filters; expose canonical "diag"
-    "mhsds_medical_history_previous_diagnosis_icd10": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(prevdiag, '\\.', '') AS diag,
-                diagschemeinuse AS diagscheme
-            FROM mhsds_medical_history_previous_diagnosis
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag
-        FROM base
-        WHERE diagscheme IN ('2','02')
-          AND {like_diag}
-    """,
+	"mhsds_medical_history_previous_diagnosis_icd10": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(prevdiag, '\\.', '') AS diag,
+				diagschemeinuse AS diagscheme
+			FROM mhsds_medical_history_previous_diagnosis
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag
+		FROM base
+		WHERE diagscheme IN ('2','02')
+		AND {like_diag}
+	""",
 
-    "mhsds_provisional_diagnosis_icd10": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(provdiag, '\\.', '') AS diag,
-                diagschemeinuse AS diagscheme
-            FROM mhsds_provisional_diagnosis
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag
-        FROM base
-        WHERE diagscheme IN ('2','02')
-          AND {like_diag}
-    """,
+	"mhsds_provisional_diagnosis_icd10": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(provdiag, '\\.', '') AS diag,
+				diagschemeinuse AS diagscheme
+			FROM mhsds_provisional_diagnosis
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag
+		FROM base
+		WHERE diagscheme IN ('2','02')
+		AND {like_diag}
+	""",
 
-    "mhsds_primary_diagnosis_icd10": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(primdiag, '\\.', '') AS diag,
-                diagschemeinuse AS diagscheme
-            FROM mhsds_primary_diagnosis
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag
-        FROM base
-        WHERE diagscheme IN ('2','02')
-          AND {like_diag}
-    """,
+	"mhsds_primary_diagnosis_icd10": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(primdiag, '\\.', '') AS diag,
+				diagschemeinuse AS diagscheme
+			FROM mhsds_primary_diagnosis
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag
+		FROM base
+		WHERE diagscheme IN ('2','02')
+		AND {like_diag}
+	""",
 
-    "mhsds_secondary_diagnosis_icd10": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(secdiag, '\\.', '') AS diag,
-                diagschemeinuse AS diagscheme
-            FROM mhsds_secondary_diagnosis
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag
-        FROM base
-        WHERE diagscheme IN ('2','02')
-          AND {like_diag}
-    """,
+	"mhsds_secondary_diagnosis_icd10": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(secdiag, '\\.', '') AS diag,
+				diagschemeinuse AS diagscheme
+			FROM mhsds_secondary_diagnosis
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag
+		FROM base
+		WHERE diagscheme IN ('2','02')
+		AND {like_diag}
+	""",
 
-    "mhsds_care_activity_icd10": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(codefind, '\\.', '') AS diag,
-                findschemeinuse AS diagscheme
-            FROM mhsds_care_activity
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag
-        FROM base
-        WHERE diagscheme IN ('1','01')
-          AND {like_diag}
-    """,
+	"mhsds_care_activity_icd10": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(codefind, '\\.', '') AS diag,
+				findschemeinuse AS diagscheme
+			FROM mhsds_care_activity
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag
+		FROM base
+		WHERE diagscheme IN ('1','01')
+		AND {like_diag}
+	""",
 
-    "mhsds_indirect_activity_icd10": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE(codefind, '\\.', '') AS diag,
-                findschemeinuse AS diagscheme
-            FROM mhsds_indirect_activity
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag
-        FROM base
-        WHERE diagscheme IN ('1','01')
-          AND {like_diag}
-    """,
+	"mhsds_indirect_activity_icd10": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE(codefind, '\\.', '') AS diag,
+				findschemeinuse AS diagscheme
+			FROM mhsds_indirect_activity
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag
+		FROM base
+		WHERE diagscheme IN ('1','01')
+		AND {like_diag}
+	""",
 
     # Cancer-source ICD pattern – make {code_col} canonical as "diag"
-    "cancer_icd10_from_table": """
-        WITH base AS (
-            SELECT DISTINCT
-                participant_id,
-                REGEXP_REPLACE({code_col}, '\\.', '') AS diag
-            FROM {table}
-            WHERE participant_id IN {participants}
-        )
-        SELECT participant_id, diag
-        FROM base
-        WHERE {like_diag}
-    """,
+	"cancer_icd10_from_table": """
+		WITH base AS (
+			SELECT DISTINCT
+				participant_id,
+				REGEXP_REPLACE({code_col}, '\\.', '') AS diag
+			FROM {table}
+			WHERE 1=1 {and_participants}
+		)
+		SELECT participant_id, diag
+		FROM base
+		WHERE {like_diag}
+	""",
 
     # --------------------- Age / Sex / Ancestry ---------------------
     "participant_age": """

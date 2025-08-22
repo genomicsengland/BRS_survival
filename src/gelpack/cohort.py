@@ -496,6 +496,23 @@ class Cohort(object):
         
         return out.reset_index(drop=True)
     
+    def _and_participants_clause(self):
+        """Helper clause to adjust sql queries so they may be limited to participants
+        already in the cohort or keep them participant agnostic. 
+        
+        Return 'AND participant_id IN (...)' or '' if no cohort PIDs yet."""
+        try:
+            pid_df = self.concat_cohort(self.pids)  # safe for dicts of Series/DFs
+        except Exception:
+            pid_df = pd.DataFrame(columns=["participant_id"])
+        pids = (
+            pid_df["participant_id"].astype(str).dropna().drop_duplicates()
+            if "participant_id" in pid_df.columns else pd.Series([], dtype=str)
+        )
+        if pids.empty:
+            return ""
+        return "AND participant_id IN " + self.loader._format_in_clause(pids)
+    
 
     def get_icd10_pids(self, limit=['all']):
         """retrieve participant_ids and cleaned icd-10 codes associated with the 
@@ -538,8 +555,8 @@ class Cohort(object):
             raise ValueError("limit must be a subset of {'all','hes','mort','mental_health','cancer'}")
         cats = ["hes", "mort", "mental_health", "cancer"] if "all" in req else list(req)
 
+        # ensure codes present from featdict
         self._ensure_axis("icd10", "icd10s")
-
 
         from gelpack.queries.labkey_queries_v19 import ICD10_SOURCES
 
@@ -553,18 +570,27 @@ class Cohort(object):
                 if "code_col" in spec:
                     extra["code_col"] = spec["code_col"]
 
+                # this loading is participant agnostic.
                 df = self.loader.grab_data(
                     key,
                     likes={"like_diag": ("diag", self.icd10s)},
+                    and_participants="",   
                     **extra,
                 )
                 df = self._ensure_pid_str(df)
                 if df is None or df.empty:
                     continue
 
-                df = df.loc[:, ["participant_id", "diag"]].copy()
-                df["source"] = cat
-                frames.append(df)
+                # keep only canonical columns if present
+                cols = ["participant_id", "diag"]
+                if "event_date" in df.columns:
+                    cols.append("event_date")
+                out = df.loc[:, [c for c in cols if c in df.columns]].copy()
+
+                # attach source metadata without schema coupling
+                out["source"] = cat
+                out["source_table"] = spec.get("table", key)
+                frames.append(out)
 
         if not frames:
             warnings.warn("No participants found for these ICD-10 codes in selected sources.")
@@ -574,26 +600,27 @@ class Cohort(object):
             pd.concat(frames, ignore_index=True)
             .assign(code=lambda d: d["diag"].astype(str).str.extract(r"([A-Z][0-9]+)")[0])
             .dropna(subset=["code"])
-            .drop_duplicates(subset=["participant_id", "code", "source"])
-            .loc[:, ["participant_id", "code", "source"]]
+            .drop_duplicates(subset=["participant_id", "code", "source", "source_table"])
             .reset_index(drop=True)
         )
 
         self.icd10_table = out
-        self.pids["icd10"] = out["participant_id"].drop_duplicates().reset_index(drop=True)
+        self.pids["icd10"] = (
+            out["participant_id"].dropna().astype(str).drop_duplicates().reset_index(drop=True)
+        )
 
         self.provenance.append({
             "action": "get_icd10_pids",
             "n_rows": int(len(out)),
             "n_unique_participants": int(out["participant_id"].nunique()),
             "categories": cats,
+            "global_search": True,
         })
 
 
     ## ---------------------------------------------------------------##
     ##################### adding cohort features #######################
     ## ---------------------------------------------------------------##
-
     def age(self):
         """Get the age at consent and current age for each participant in the 
         self. This function does go over each source (cancer, icd10, hpo...)
@@ -914,6 +941,107 @@ class Cohort(object):
         self.feature_tables["mortality_provenance"] = pd.DataFrame(events_prov)
         self.provenance.append({"action": "mortality", "pick": pick, "groups": list(self.pids.keys())})
 
+
+    ## ---------------------------------------------------------------##
+    ############## annotate cohort with ICD10 codes ####################
+    ## ---------------------------------------------------------------##
+
+    def tag_icd10(self, codes, *, tag_name, limit=['all']):
+        """
+        Annotate the existing cohort members with ICD-10 presence flags,
+        counts, and earliest event date (where available). also captures a source
+        for the data/inclusion.
+
+        Does NOT modify self.pids. Stores:
+        - self.feature_tables['icd10_flags'][label]
+        - self.icd10_tags[tag_name] 
+        """
+        if not self.pids:
+            raise ValueError("tag_icd10() requires an existing cohort (participants).")
+
+        valid = {"all", "hes", "mort", "mental_health", "cancer"}
+        req = set(limit)
+        if not req.issubset(valid):
+            raise ValueError("limit must be a subset of {'all','hes','mort','mental_health','cancer'}")
+        cats = ["hes", "mort", "mental_health", "cancer"] if "all" in req else list(req)
+
+        # normalise codes
+        terms = list(dict.fromkeys(str(x) for x in (codes or [])))
+        if not terms:
+            raise ValueError("Provide at least one ICD-10 code or prefix.")
+        if not tag_name:
+            raise ValueError("Provide tag_name=... for the boolean flag column.")
+
+        # cohort PIDs (as strings)
+        base_pids = self.concat_cohort(self.pids)
+        if base_pids.empty or "participant_id" not in base_pids.columns:
+            raise ValueError("No participant_ids available in the cohort.")
+        pid_list = base_pids["participant_id"].astype(str).dropna().drop_duplicates()
+
+        from gelpack.queries.labkey_queries_v19 import ICD10_SOURCES
+
+        frames = []
+        for cat in cats:
+            for spec in ICD10_SOURCES.get(cat, []):
+                key = spec["key"]
+                extra = {}
+                if "table" in spec:
+                    extra["table"] = spec["table"]
+                if "code_col" in spec:
+                    extra["code_col"] = spec["code_col"]
+
+                df = self.loader.grab_data(
+                    key,
+                    participants=pid_list,
+                    likes={"like_diag": ("diag", terms)},
+                    and_participants=" AND participant_id IN {participants}",  # <— scoped to cohort
+                    **extra,
+                )
+                df = self._ensure_pid_str(df)
+                if df is None or df.empty:
+                    continue
+
+                cols = ["participant_id", "diag"]
+                if "event_date" in df.columns:
+                    cols.append("event_date")
+                out = df.loc[:, [c for c in cols if c in df.columns]].copy()
+
+                out["code"] = out["diag"].astype(str).str.extract(r"([A-Z][0-9]+)")[0]
+                out = out.dropna(subset=["code"])
+                out["source"] = cat
+                out["source_table"] = spec.get("table", key)
+                frames.append(out)
+
+        # Long raw matches (may be empty if no hits)
+        tag_df = (pd.concat(frames, ignore_index=True) if frames else
+                pd.DataFrame(columns=["participant_id", "code", "source", "source_table", "event_date"]))
+
+        # Store raw
+        if not hasattr(self, "icd10_tags"):
+            self.icd10_tags = {}
+        self.icd10_tags[tag_name] = tag_df
+
+        # Build Boolean per-participant feature over the cohort
+        pid_base = pd.DataFrame({"participant_id": pid_list})
+        hits = tag_df[["participant_id"]].drop_duplicates() if not tag_df.empty else pd.DataFrame(columns=["participant_id"])
+        hits["__hit__"] = True
+        flags = pid_base.merge(hits, on="participant_id", how="left")
+        colname = f"icd10_{tag_name}"
+        flags[colname] = flags["__hit__"].fillna(False).astype(bool)
+        flags = flags[["participant_id", colname]]
+
+        # Expose via feature_tables so concat_all() picks it up
+        ft = self.feature_tables.setdefault("icd10_flags", {})
+        ft[tag_name] = flags
+
+        self.provenance.append({
+            "action": "tag_icd10",
+            "tag_name": tag_name,
+            "n_rows": int(len(tag_df)),
+            "n_participants_tagged": int(flags[colname].sum()),
+            "categories": cats,
+            "cohort_scoped": True,
+        })
 
     ## ---------------------------------------------------------------##
     ##################### sample level data ############################
