@@ -97,47 +97,56 @@ QUERIES = {
 
     # --------------------- ICD-10 (HES / Mort / Mental Health / Cancer sources) ---------------------
     # HES: apc / ae / op – expose canonical diag + event_date (dot-stripped)
-	"hes_apc_diag_like": """
-		WITH base AS (
-			SELECT DISTINCT
-				participant_id,
-				REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
-				disdate AS event_date
-			FROM hes_apc
-			WHERE 1=1 {and_participants}
-		)
-		SELECT participant_id, diag, event_date
-		FROM base
-		WHERE {like_diag}
-	""",
+    "hes_apc_diag_like": """
+        WITH base AS (
+            SELECT DISTINCT
+                participant_id,
+                REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
+                CASE
+                    WHEN disdate < CAST('1900-01-01' AS TIMESTAMP) THEN NULL
+                    ELSE disdate
+                END AS event_date
+            FROM hes_apc
+            WHERE 1=1 {and_participants}
+        )
+        SELECT participant_id, diag, event_date
+        FROM base
+        WHERE {like_diag}
+    """,
 
-	"hes_ae_diag_like": """
-		WITH base AS (
-			SELECT DISTINCT
-				participant_id,
-				REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
-				arrivaldate AS event_date
-			FROM hes_ae
-			WHERE 1=1 {and_participants}
-		)
-		SELECT participant_id, diag, event_date
-		FROM base
-		WHERE {like_diag}
-	""",
+    "hes_ae_diag_like": """
+        WITH base AS (
+            SELECT DISTINCT
+                participant_id,
+                REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
+                CASE
+                    WHEN arrivaldate < CAST('1900-01-01' AS TIMESTAMP) THEN NULL
+                    ELSE arrivaldate
+                END AS event_date
+            FROM hes_ae
+            WHERE 1=1 {and_participants}
+        )
+        SELECT participant_id, diag, event_date
+        FROM base
+        WHERE {like_diag}
+    """,
 
-	"hes_op_diag_like": """
-		WITH base AS (
-			SELECT DISTINCT
-				participant_id,
-				REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
-				apptdate AS event_date
-			FROM hes_op
-			WHERE 1=1 {and_participants}
-		)
-		SELECT participant_id, diag, event_date
-		FROM base
-		WHERE {like_diag}
-	""",
+    "hes_op_diag_like": """
+        WITH base AS (
+            SELECT DISTINCT
+                participant_id,
+                REGEXP_REPLACE(diag_all, '\\.', '') AS diag,
+                CASE
+                    WHEN apptdate < CAST('1900-01-01' AS TIMESTAMP) THEN NULL
+                    ELSE apptdate
+                END AS event_date
+            FROM hes_op
+            WHERE 1=1 {and_participants}
+        )
+        SELECT participant_id, diag, event_date
+        FROM base
+        WHERE {like_diag}
+    """,
 
     # Mortality (ICD10 multiple cause) – canonical diag + event_date
     "mortality_icd10_like": """
@@ -171,11 +180,11 @@ QUERIES = {
 
 	"mhldds_event_icd10_like": """
 		WITH base AS (
-			SELECT participant_id, REGEXP_REPLACE(primarydiagnosis,   '\\.', '') AS diag
+			SELECT participant_id, REGEXP_REPLACE(mhd_primarydiagnosis,   '\\.', '') AS diag
 			FROM mhldds_event
 			WHERE 1=1 {and_participants}
 			UNION ALL
-			SELECT participant_id, REGEXP_REPLACE(secondarydiagnosis, '\\.', '') AS diag
+			SELECT participant_id, REGEXP_REPLACE(mhd_secondarydiagnosis, '\\.', '') AS diag
 			FROM mhldds_event
 			WHERE 1=1 {and_participants}
 		)

@@ -946,18 +946,32 @@ class Cohort(object):
     ############## annotate cohort with ICD10 codes ####################
     ## ---------------------------------------------------------------##
 
-    def tag_icd10(self, codes, *, tag_name, limit=['all']):
+    def tag_icd10(self, codes, *, tag_name, limit=['all'], collapse='match'):
         """
         Annotate the existing cohort members with ICD-10 presence flags,
         counts, and earliest event date (where available). also captures a source
         for the data/inclusion.
 
         Does NOT modify self.pids. Stores:
-        - self.feature_tables['icd10_flags'][label]
-        - self.icd10_tags[tag_name] 
+            - self.icd10_tags_raw[tag_name] : raw matches (as returned by sources)
+            - self.icd10_tags[tag_name]     : cleaned table (one row per PID+searched_code, earliest event_date if present)
+            - self.feature_tables['icd10_flags'][tag_name] : boolean per PID (for concat_all)
+        
+        Args:
+        codes (list[str]): ICD-10 prefixes (e.g., ['C77']). Matching is prefix-based.
+        tag_name (str): Name of the tag used for boolean column & storage keys.
+        limit (list[str]): Subset of {'all','hes','mort','mental_health','cancer'}; 'all' expands to all categories.
+        collapse ({'match','search','full'}, default 'match'):
+            How to populate the cleaned 'code' column:
+            - 'match'  : one row per matched token (e.g., 'C772', 'C775')
+            - 'search' : one row per matched search prefix (e.g., 'C77')
+            - 'full'   : one row per full diag string (e.g., 'C56X|C772|C775') if any token matches
         """
         if not self.pids:
             raise ValueError("tag_icd10() requires an existing cohort (participants).")
+
+        if collapse not in {"match", "search", "full"}:
+            raise ValueError("collapse must be one of {'match','search','full'}")
 
         valid = {"all", "hes", "mort", "mental_health", "cancer"}
         req = set(limit)
@@ -965,22 +979,24 @@ class Cohort(object):
             raise ValueError("limit must be a subset of {'all','hes','mort','mental_health','cancer'}")
         cats = ["hes", "mort", "mental_health", "cancer"] if "all" in req else list(req)
 
-        # normalise codes
-        terms = list(dict.fromkeys(str(x) for x in (codes or [])))
+        # normalise searched codes and name
+        terms = list(dict.fromkeys(str(x).upper() for x in (codes or [])))
         if not terms:
             raise ValueError("Provide at least one ICD-10 code or prefix.")
         if not tag_name:
             raise ValueError("Provide tag_name=... for the boolean flag column.")
+        terms_set = set(terms)
 
-        # cohort PIDs (as strings)
+        # Build an AND participant_id IN (...) clause based on current cohort
         base_pids = self.concat_cohort(self.pids)
         if base_pids.empty or "participant_id" not in base_pids.columns:
             raise ValueError("No participant_ids available in the cohort.")
-        pid_list = base_pids["participant_id"].astype(str).dropna().drop_duplicates()
+        and_clause = self._and_participants_clause()
 
         from gelpack.queries.labkey_queries_v19 import ICD10_SOURCES
 
-        frames = []
+        # -------- pull raw data --------
+        raw_frames = []
         for cat in cats:
             for spec in ICD10_SOURCES.get(cat, []):
                 key = spec["key"]
@@ -992,56 +1008,141 @@ class Cohort(object):
 
                 df = self.loader.grab_data(
                     key,
-                    participants=pid_list,
-                    likes={"like_diag": ("diag", terms)},
-                    and_participants=" AND participant_id IN {participants}",  # <— scoped to cohort
+                    likes={"like_diag": ("diag", terms)},  # use diag alias.
+                    and_participants=and_clause,  # scoped to cohort members
                     **extra,
                 )
                 df = self._ensure_pid_str(df)
                 if df is None or df.empty:
                     continue
 
+                # Canonical columns (if present in source SQL)
                 cols = ["participant_id", "diag"]
                 if "event_date" in df.columns:
                     cols.append("event_date")
-                out = df.loc[:, [c for c in cols if c in df.columns]].copy()
 
-                out["code"] = out["diag"].astype(str).str.extract(r"([A-Z][0-9]+)")[0]
-                out = out.dropna(subset=["code"])
+                out = df.loc[:, [c for c in cols if c in df.columns]].copy()
                 out["source"] = cat
                 out["source_table"] = spec.get("table", key)
-                frames.append(out)
+                raw_frames.append(out)
 
-        # Long raw matches (may be empty if no hits)
-        tag_df = (pd.concat(frames, ignore_index=True) if frames else
-                pd.DataFrame(columns=["participant_id", "code", "source", "source_table", "event_date"]))
+        raw_df = (pd.concat(raw_frames, ignore_index=True) if raw_frames else
+                pd.DataFrame(columns=["participant_id", "diag", "event_date", "source", "source_table"]))
 
-        # Store raw
+        if not hasattr(self, "icd10_tags_raw"):
+            self.icd10_tags_raw = {}
+        self.icd10_tags_raw[tag_name] = raw_df
+
+        # Normalise event_date and diag string in a working frame
+        wrk = raw_df.copy()
+        if "event_date" in wrk.columns:
+            wrk["event_date"] = pd.to_datetime(wrk["event_date"], errors="coerce")
+            # Guard against bogus sentinel dates like 1801-01-01 by blanking < 1900
+            wrk.loc[wrk["event_date"] < pd.Timestamp(1900, 1, 1), "event_date"] = pd.NaT
+
+        # Normalise diag: uppercase, strip dots if any remain, collapse pipes, trim pipes
+        wrk["diag_full"] = (
+            wrk.get("diag", pd.Series(dtype=str))
+            .fillna("")
+            .astype(str)
+            .str.upper()
+            .str.replace(".", "", regex=False)
+            .str.replace(r"\|+", "|", regex=True)
+            .str.strip("|")
+        )
+
+        # Helper: find the matching search prefix for a token (or None)
+        def _matched_prefix(tok: str):
+            if not tok:
+                return None
+            for p in terms_set:
+                if tok.startswith(p):
+                    return p
+            return None
+
+        # -------- 2) CLEANED TABLE (collapse modes) --------
+        if wrk.empty:
+            clean_df = pd.DataFrame(columns=["participant_id", "code", "event_date", "source", "source_table"])
+        else:
+            if collapse == "full":
+                # Keep rows whose full diag contains ANY matching token; code = full diag string
+                tmp = wrk.copy()
+                # Flag rows that have at least one token matching any prefix
+                tokens = tmp["diag_full"].str.split("|")
+                tmp = tmp.assign(__tokens=tokens)
+                tmp["__has_match"] = tmp["__tokens"].apply(
+                    lambda toks: any(_matched_prefix(t) is not None for t in (toks or []))
+                )
+                tmp = tmp[tmp["__has_match"]].drop(columns=["__tokens", "__has_match"])
+                tmp["code"] = tmp["diag_full"]
+                # Reduce to earliest per (PID, full-combo)
+                if "event_date" in tmp.columns:
+                    tmp = tmp.sort_values(["participant_id", "code", "event_date"])
+                    clean_df = tmp.groupby(["participant_id", "code"], as_index=False).first()
+                else:
+                    clean_df = tmp.drop_duplicates(subset=["participant_id", "code"]).reset_index(drop=True)
+
+            else:
+                # Token-level explode, keep only tokens that match prefixes
+                tokens = wrk["diag_full"].str.split("|")
+                ex = wrk.assign(__token=tokens).explode("__token", ignore_index=True)
+                ex["__token"] = ex["__token"].str.strip()
+                ex = ex[ex["__token"].notna() & (ex["__token"] != "")]
+
+                ex["__matched_prefix"] = ex["__token"].map(_matched_prefix)
+                ex = ex[ex["__matched_prefix"].notna()]  # only rows with a match
+
+                if collapse == "search":
+                    ex["code"] = ex["__matched_prefix"]  # e.g., 'C77'
+                else:
+                    # collapse == 'match'
+                    ex["code"] = ex["__token"]  # e.g., 'C772', 'C775'
+
+                # Reduce to earliest per (PID, code)
+                if "event_date" in ex.columns:
+                    ex = ex.sort_values(["participant_id", "code", "event_date"])
+                    clean_df = ex.groupby(["participant_id", "code"], as_index=False).first()
+                else:
+                    clean_df = ex.drop_duplicates(subset=["participant_id", "code"]).reset_index(drop=True)
+
+            # Keep canonical output columns
+            keep = ["participant_id", "code", "source", "source_table"]
+            if "event_date" in clean_df.columns:
+                keep.insert(2, "event_date")
+            clean_df = clean_df.loc[:, [c for c in keep if c in clean_df.columns]]
+
+        # Store cleaned data
         if not hasattr(self, "icd10_tags"):
             self.icd10_tags = {}
-        self.icd10_tags[tag_name] = tag_df
+        self.icd10_tags[tag_name] = clean_df
 
-        # Build Boolean per-participant feature over the cohort
+        # -------- 3) BOOLEAN FLAGS over the cohort  --------
+        pid_list = base_pids["participant_id"].astype(str).dropna().drop_duplicates()
         pid_base = pd.DataFrame({"participant_id": pid_list})
-        hits = tag_df[["participant_id"]].drop_duplicates() if not tag_df.empty else pd.DataFrame(columns=["participant_id"])
+        hits = (clean_df[["participant_id"]].drop_duplicates()
+                if not clean_df.empty else pd.DataFrame(columns=["participant_id"]))
         hits["__hit__"] = True
         flags = pid_base.merge(hits, on="participant_id", how="left")
         colname = f"icd10_{tag_name}"
         flags[colname] = flags["__hit__"].fillna(False).astype(bool)
         flags = flags[["participant_id", colname]]
 
-        # Expose via feature_tables so concat_all() picks it up
         ft = self.feature_tables.setdefault("icd10_flags", {})
         ft[tag_name] = flags
 
+        # Provenance
         self.provenance.append({
             "action": "tag_icd10",
             "tag_name": tag_name,
-            "n_rows": int(len(tag_df)),
-            "n_participants_tagged": int(flags[colname].sum()),
+            "n_rows_raw": int(len(raw_df)),
+            "n_rows_clean": int(len(clean_df)),
+            "n_participants_flagged": int(flags[colname].sum()),
             "categories": cats,
             "cohort_scoped": True,
+            "collapse": collapse,
         })
+
+
 
     ## ---------------------------------------------------------------##
     ##################### sample level data ############################
@@ -1650,8 +1751,10 @@ class Cohort(object):
             "sources": prov_df.to_dict("records") if not prov_df.empty else [],
         })
 
+
     def build_normalised_views(self, participant_strategy="first"):
         return self.build_normalized_views(participant_strategy=participant_strategy)
+
 
     def load_icd10_data(self):
         """gelpack contains a translation file for icd-10 codes, this function
